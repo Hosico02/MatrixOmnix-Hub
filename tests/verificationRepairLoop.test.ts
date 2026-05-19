@@ -62,3 +62,92 @@ describe('failed verification repair loop', () => {
     expect(summary.assigned_tasks.findIndex((t) => /Repair failed verification/.test(t.title))).toBe(1);
   });
 });
+
+import { extractRootCauseHints, buildVerificationRepairTask } from '../src/core/verificationRepair.js';
+
+describe('extractRootCauseHints', () => {
+  it('parses Python ImportError(cannot import name X from Y)', () => {
+    const hints = extractRootCauseHints(
+      "tests/test_smoke.py:3: in <module>\n    from prompts import PERSONALITIES\nE   ImportError: cannot import name 'PERSONALITIES' from 'prompts' (/repo/prompts.py)\n"
+    );
+    expect(hints.length).toBeGreaterThan(0);
+    const h = hints.find((x) => x.signature === 'python_import_name_missing');
+    expect(h).toBeDefined();
+    expect(h!.message).toContain("'PERSONALITIES'");
+    expect(h!.message).toContain("'prompts'");
+    expect(h!.related_files).toContain('/repo/prompts.py');
+    expect(h!.hint).toMatch(/Do NOT install new packages/);
+  });
+
+  it('parses ModuleNotFoundError separately from cannot-import-name', () => {
+    const hints = extractRootCauseHints("ModuleNotFoundError: No module named 'foo_bar'");
+    expect(hints.some((h) => h.signature === 'python_module_not_found' && h.message.includes("'foo_bar'"))).toBe(true);
+  });
+
+  it('parses openai missing credentials signature', () => {
+    const hints = extractRootCauseHints('openai.OpenAIError: The api_key client option must be set');
+    expect(hints.some((h) => h.signature === 'openai_missing_credentials')).toBe(true);
+  });
+
+  it('parses Python SyntaxError with file and line', () => {
+    const hints = extractRootCauseHints('  File "tests/test_app.py", line 42\n    assert x == "y\\""\n              ^\nSyntaxError: invalid syntax');
+    const h = hints.find((x) => x.signature === 'python_syntax_error');
+    expect(h).toBeDefined();
+    expect(h!.related_files).toContain('tests/test_app.py');
+    expect(h!.message).toContain('42');
+  });
+});
+
+describe('buildVerificationRepairTask escalation', () => {
+  it('surfaces root-cause hints in the first repair task description', () => {
+    const failedTask: AgentTask = {
+      id: 't1', iteration_id: 'it1', assigned_to: 'executor',
+      title: 'Add Python smoke tests', description: '', acceptance_criteria: [],
+      expected_changed_files: ['tests/test_smoke.py'], verification_commands: ['python3 -m pytest -q'],
+      priority: 'high', status: 'pending',
+    };
+    const result: AgentResult = {
+      task_id: 't1', agent: 'executor', status: 'failed', summary: '', changed_files: ['tests/test_smoke.py'],
+      commands_run: ['python3 -m pytest -q'],
+      verification_evidence: [{
+        command: 'python3 -m pytest -q', passed: false, exit_code: 1,
+        stdout_summary: "ImportError: cannot import name 'PERSONALITIES' from 'prompts' (/repo/prompts.py)",
+        stderr_summary: '', duration_ms: 10, failure_reason: 'exit_code_1',
+      }],
+      failures: [], risks: [], next_steps: [],
+    };
+    const repair = buildVerificationRepairTask(failedTask, result);
+    expect(repair).not.toBeNull();
+    expect(repair!.description).toMatch(/python_import_name_missing/);
+    expect(repair!.description).toMatch(/PERSONALITIES/);
+    expect(repair!.description).not.toMatch(/ESCALATION/);
+  });
+
+  it('marks ESCALATION and lists prior attempts when consecutiveFailures>=2', () => {
+    const failedTask: AgentTask = {
+      id: 't2', iteration_id: 'it2', assigned_to: 'executor',
+      title: 'Add Python smoke tests', description: '', acceptance_criteria: [],
+      expected_changed_files: [], verification_commands: ['python3 -m pytest -q'],
+      priority: 'high', status: 'pending',
+    };
+    const result: AgentResult = {
+      task_id: 't2', agent: 'executor', status: 'failed', summary: '', changed_files: [],
+      commands_run: ['python3 -m pytest -q'],
+      verification_evidence: [{
+        command: 'python3 -m pytest -q', passed: false, exit_code: 1,
+        stdout_summary: "ImportError: cannot import name 'X' from 'y' (/repo/y.py)",
+        stderr_summary: '', duration_ms: 10, failure_reason: 'exit_code_1',
+      }],
+      failures: [], risks: [], next_steps: [],
+    };
+    const repair = buildVerificationRepairTask(failedTask, result, {
+      consecutiveFailures: 2,
+      priorAttempts: [
+        { summary: 'guessed missing openai package', changed_files: ['requirements.txt'] },
+      ],
+    });
+    expect(repair!.description).toMatch(/\*\*ESCALATION\*\*: this exact command has now failed 2 times/);
+    expect(repair!.description).toMatch(/guessed missing openai package/);
+    expect(repair!.description).toMatch(/Prior repair attempts/);
+  });
+});

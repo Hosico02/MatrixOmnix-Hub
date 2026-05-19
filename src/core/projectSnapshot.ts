@@ -35,8 +35,19 @@ export async function takeSnapshot(projectPath: string): Promise<ProjectSnapshot
   const pyFiles = files.filter((f) => f.endsWith('.py'));
   const pythonBlob = `${pyproject ?? ''}\n${requirements ?? ''}`;
   const pkgDeps = { ...(pkg?.dependencies ?? {}), ...(pkg?.devDependencies ?? {}) };
+  // Tooling deps that a Python project may add for adjunct Node tooling
+  // (Playwright/Vite for UI verification scripts). Their presence alone does
+  // NOT make the project a JS app — without these the dep list would be
+  // empty.
+  const PERIPHERAL_NODE_DEPS = new Set([
+    '@playwright/test', 'playwright', 'vite', '@vitejs/plugin-vue',
+    '@vitejs/plugin-react', 'esbuild', 'typescript', 'tsx', 'tsc-watch',
+  ]);
+  const nonPeripheralDeps = Object.keys(pkgDeps).filter((d) =>
+    !PERIPHERAL_NODE_DEPS.has(d) && !/^@types\//.test(d),
+  );
   const packageLooksLikeJsApp =
-    Object.keys(pkgDeps).length > 0 ||
+    nonPeripheralDeps.length > 0 ||
     typeof pkg?.main === 'string' ||
     pkg?.bin !== undefined;
   const strongPythonSignal =

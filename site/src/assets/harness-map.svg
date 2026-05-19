@@ -1,28 +1,158 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900" role="img" aria-label="MatrixOmnix harness coverage map">
-  <rect width="1200" height="900" fill="#fff"/>
-  <rect x="72" y="74" width="1056" height="752" fill="#111"/>
-  <text x="112" y="150" font-family="Inter,Arial" font-size="58" font-weight="900" fill="#fff">Harness Map</text>
-  <g font-family="Inter,Arial" font-size="34" font-weight="800">
-    <g fill="#fff">
-      <rect x="112" y="224" width="284" height="116"/>
-      <rect x="458" y="224" width="284" height="116"/>
-      <rect x="804" y="224" width="284" height="116"/>
-      <rect x="112" y="414" width="284" height="116"/>
-      <rect x="458" y="414" width="284" height="116"/>
-      <rect x="804" y="414" width="284" height="116"/>
-      <rect x="112" y="604" width="976" height="116"/>
-    </g>
-    <g fill="#111">
-      <text x="254" y="294" text-anchor="middle">UI</text>
-      <text x="600" y="294" text-anchor="middle">CLI</text>
-      <text x="946" y="294" text-anchor="middle">API</text>
-      <text x="254" y="484" text-anchor="middle">Config</text>
-      <text x="600" y="484" text-anchor="middle">Data</text>
-      <text x="946" y="484" text-anchor="middle">Worker</text>
-      <text x="600" y="674" text-anchor="middle">Single-file Intake + Runtime Contract</text>
-    </g>
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="980" viewBox="0 0 1280 980" role="img" aria-label="MatrixOmnix harness coverage map: 15 delivery surfaces across three honest tiers of verification depth — structural contract, behavioural runtime, and productization surface.">
+  <rect width="1280" height="980" fill="#fff"/>
+  <rect x="40" y="40" width="1200" height="900" fill="#111"/>
+
+  <text x="80" y="106" font-family="Inter,Arial" font-size="42" font-weight="900" fill="#fff">Harness Map · 3 tiers</text>
+  <text x="80" y="134" font-family="Inter,Arial" font-size="15" font-weight="500" fill="#fff" opacity="0.7">15 product surfaces auto-detected · each tier asks a stricter question than the one above it · "covered" ≠ "shippable"</text>
+
+  <!-- Tier legend -->
+  <g font-family="Inter,Arial" font-size="13" font-weight="700" fill="#fff">
+    <rect x="80" y="166" width="14" height="14" fill="#3ecf8e"/>
+    <text x="102" y="178">covered</text>
+    <rect x="178" y="166" width="14" height="14" fill="#f5a623"/>
+    <text x="200" y="178">covered · skips when runtime lib absent</text>
+    <rect x="478" y="166" width="14" height="14" fill="#666"/>
+    <text x="500" y="178">not yet covered</text>
   </g>
-  <g stroke="#fff" stroke-width="4" opacity="0.5">
-    <path d="M396 282h62M742 282h62M254 340v74M600 340v74M946 340v74M396 472h62M742 472h62M600 530v74"/>
+
+  <!-- Column headers: surface | tier 1 | tier 2 | tier 3 -->
+  <g font-family="Inter,Arial" font-size="13" font-weight="800" fill="#fff" letter-spacing="1.5">
+    <text x="80" y="218">SURFACE</text>
+    <text x="480" y="218" text-anchor="middle">TIER 1 · STRUCTURAL CONTRACT</text>
+    <text x="760" y="218" text-anchor="middle">TIER 2 · BEHAVIOURAL RUNTIME</text>
+    <text x="1040" y="218" text-anchor="middle">TIER 3 · PRODUCTIZATION SURFACE</text>
   </g>
+  <g font-family="Inter,Arial" font-size="11" font-weight="500" fill="#fff" opacity="0.55">
+    <text x="480" y="234" text-anchor="middle">source shape · file presence · dep declaration</text>
+    <text x="760" y="234" text-anchor="middle">exercises the surface end-to-end</text>
+    <text x="1040" y="234" text-anchor="middle">operational maturity gates above runtime</text>
+  </g>
+
+  <!-- Helper grid: each row is a surface -->
+  <!-- Row y = 254 + i*40 -->
+
+  <!-- Group label: WEB &amp; CLIENT -->
+  <text x="80" y="270" font-family="Inter,Arial" font-size="11" font-weight="700" fill="#fff" opacity="0.45" letter-spacing="2">WEB &amp; CLIENT</text>
+
+  <g font-family="Inter,Arial" font-size="13" font-weight="700">
+    <!-- SPA UI -->
+    <text x="80" y="296" fill="#fff">SPA UI <tspan font-size="11" font-weight="500" opacity="0.55">· React · Vue · Next</tspan></text>
+    <rect x="384" y="280" width="192" height="22" fill="#3ecf8e"/><text x="480" y="296" text-anchor="middle" fill="#111">ui_source · build</text>
+    <rect x="664" y="280" width="192" height="22" fill="#3ecf8e"/><text x="760" y="296" text-anchor="middle" fill="#111">ui-product-check.mjs</text>
+    <rect x="944" y="280" width="192" height="22" fill="#f5a623"/><text x="1040" y="296" text-anchor="middle" fill="#111">render smoke · a11y · responsive</text>
+
+    <!-- SSR UI -->
+    <text x="80" y="324" fill="#fff">SSR UI <tspan font-size="11" font-weight="500" opacity="0.55">· Flask · Django · ERB</tspan></text>
+    <rect x="384" y="308" width="192" height="22" fill="#3ecf8e"/><text x="480" y="324" text-anchor="middle" fill="#111">templates/*.html ≥ 4KB</text>
+    <rect x="664" y="308" width="192" height="22" fill="#3ecf8e"/><text x="760" y="324" text-anchor="middle" fill="#111">test_client GET / asserts 200</text>
+    <rect x="944" y="308" width="192" height="22" fill="#666"/><text x="1040" y="324" text-anchor="middle" fill="#fff">CSP · rate limit · error envelope</text>
+
+    <!-- Browser Ext -->
+    <text x="80" y="352" fill="#fff">Browser Ext <tspan font-size="11" font-weight="500" opacity="0.55">· MV3 popup · background</tspan></text>
+    <rect x="384" y="336" width="192" height="22" fill="#3ecf8e"/><text x="480" y="352" text-anchor="middle" fill="#111">manifest.json schema valid</text>
+    <rect x="664" y="336" width="192" height="22" fill="#3ecf8e"/><text x="760" y="352" text-anchor="middle" fill="#111">referenced files exist on disk</text>
+    <rect x="944" y="336" width="192" height="22" fill="#666"/><text x="1040" y="352" text-anchor="middle" fill="#fff">store-listing assets · permissions audit</text>
+
+    <!-- Notebook -->
+    <text x="80" y="380" fill="#fff">Notebook <tspan font-size="11" font-weight="500" opacity="0.55">· .ipynb reproducibility</tspan></text>
+    <rect x="384" y="364" width="192" height="22" fill="#3ecf8e"/><text x="480" y="380" text-anchor="middle" fill="#111">nbformat parse · cell shape</text>
+    <rect x="664" y="364" width="192" height="22" fill="#f5a623"/><text x="760" y="380" text-anchor="middle" fill="#111">nbclient executes · skip if no kernel</text>
+    <rect x="944" y="364" width="192" height="22" fill="#666"/><text x="1040" y="380" text-anchor="middle" fill="#fff">pinned kernel · param injection</text>
+
+    <!-- CLI -->
+    <text x="80" y="408" fill="#fff">CLI <tspan font-size="11" font-weight="500" opacity="0.55">· bin entry · subcommands</tspan></text>
+    <rect x="384" y="392" width="192" height="22" fill="#3ecf8e"/><text x="480" y="408" text-anchor="middle" fill="#111">pkg.bin · #!/usr/bin/env</text>
+    <rect x="664" y="392" width="192" height="22" fill="#3ecf8e"/><text x="760" y="408" text-anchor="middle" fill="#111">--help + discovered subcommand</text>
+    <rect x="944" y="392" width="192" height="22" fill="#666"/><text x="1040" y="408" text-anchor="middle" fill="#fff">exit-code matrix · stderr contract</text>
+  </g>
+
+  <!-- Group label: SERVICES &amp; DATA -->
+  <text x="80" y="446" font-family="Inter,Arial" font-size="11" font-weight="700" fill="#fff" opacity="0.45" letter-spacing="2">SERVICES &amp; DATA</text>
+
+  <g font-family="Inter,Arial" font-size="13" font-weight="700">
+    <!-- API -->
+    <text x="80" y="472" fill="#fff">API <tspan font-size="11" font-weight="500" opacity="0.55">· Flask · FastAPI · Hono · Fastify · Express</tspan></text>
+    <rect x="384" y="456" width="192" height="22" fill="#3ecf8e"/><text x="480" y="472" text-anchor="middle" fill="#111">routes parsed · contract harness</text>
+    <rect x="664" y="456" width="192" height="22" fill="#3ecf8e"/><text x="760" y="472" text-anchor="middle" fill="#111">test_client hits every route · &lt; 500</text>
+    <rect x="944" y="456" width="192" height="22" fill="#666"/><text x="1040" y="472" text-anchor="middle" fill="#fff">error envelope · 429 rate limit · OpenAPI</text>
+
+    <!-- DB CRUD -->
+    <text x="80" y="500" fill="#fff">DB CRUD <tspan font-size="11" font-weight="500" opacity="0.55">· sqlite · postgres · prisma</tspan></text>
+    <rect x="384" y="484" width="192" height="22" fill="#3ecf8e"/><text x="480" y="500" text-anchor="middle" fill="#111">schema + queries detected</text>
+    <rect x="664" y="484" width="192" height="22" fill="#3ecf8e"/><text x="760" y="500" text-anchor="middle" fill="#111">round-trip insert + select</text>
+    <rect x="944" y="484" width="192" height="22" fill="#666"/><text x="1040" y="500" text-anchor="middle" fill="#fff">tx boundaries · index plan · migrations</text>
+
+    <!-- Worker -->
+    <text x="80" y="528" fill="#fff">Worker <tspan font-size="11" font-weight="500" opacity="0.55">· Python &amp; Node · queue · scheduler</tspan></text>
+    <rect x="384" y="512" width="192" height="22" fill="#3ecf8e"/><text x="480" y="528" text-anchor="middle" fill="#111">drain fn + enqueue fn parsed</text>
+    <rect x="664" y="512" width="192" height="22" fill="#3ecf8e"/><text x="760" y="528" text-anchor="middle" fill="#111">enqueue → drain → result file</text>
+    <rect x="944" y="512" width="192" height="22" fill="#666"/><text x="1040" y="528" text-anchor="middle" fill="#fff">retry/backoff · dead-letter · idempotency</text>
+
+    <!-- Multi-service -->
+    <text x="80" y="556" fill="#fff">Multi-service <tspan font-size="11" font-weight="500" opacity="0.55">· docker-compose / k8s</tspan></text>
+    <rect x="384" y="540" width="192" height="22" fill="#3ecf8e"/><text x="480" y="556" text-anchor="middle" fill="#111">service graph detected</text>
+    <rect x="664" y="540" width="192" height="22" fill="#3ecf8e"/><text x="760" y="556" text-anchor="middle" fill="#111">cross-service smoke (subsumes per-svc)</text>
+    <rect x="944" y="540" width="192" height="22" fill="#666"/><text x="1040" y="556" text-anchor="middle" fill="#fff">tracing · service mesh contract</text>
+
+    <!-- Config -->
+    <text x="80" y="584" fill="#fff">Config <tspan font-size="11" font-weight="500" opacity="0.55">· Python &amp; Node · env vars</tspan></text>
+    <rect x="384" y="568" width="192" height="22" fill="#3ecf8e"/><text x="480" y="584" text-anchor="middle" fill="#111">env keys + bindings parsed</text>
+    <rect x="664" y="568" width="192" height="22" fill="#3ecf8e"/><text x="760" y="584" text-anchor="middle" fill="#111">monkeypatch → import → round-trip</text>
+    <rect x="944" y="568" width="192" height="22" fill="#666"/><text x="1040" y="584" text-anchor="middle" fill="#fff">secret rotation · per-env override matrix</text>
+  </g>
+
+  <!-- Group label: SPECIALIZED -->
+  <text x="80" y="622" font-family="Inter,Arial" font-size="11" font-weight="700" fill="#fff" opacity="0.45" letter-spacing="2">SPECIALIZED SURFACES</text>
+
+  <g font-family="Inter,Arial" font-size="13" font-weight="700">
+    <!-- Game -->
+    <text x="80" y="648" fill="#fff">Game <tspan font-size="11" font-weight="500" opacity="0.55">· Phaser · pygame</tspan></text>
+    <rect x="384" y="632" width="192" height="22" fill="#3ecf8e"/><text x="480" y="648" text-anchor="middle" fill="#111">Game ctor · Scene · loop pillars</text>
+    <rect x="664" y="632" width="192" height="22" fill="#f5a623"/><text x="760" y="648" text-anchor="middle" fill="#111">headless game step · skip if no phaser</text>
+    <rect x="944" y="632" width="192" height="22" fill="#666"/><text x="1040" y="648" text-anchor="middle" fill="#fff">determinism · save/load · fps budget</text>
+
+    <!-- 3D / WebGL -->
+    <text x="80" y="676" fill="#fff">3D / WebGL <tspan font-size="11" font-weight="500" opacity="0.55">· THREE · regl</tspan></text>
+    <rect x="384" y="660" width="192" height="22" fill="#3ecf8e"/><text x="480" y="676" text-anchor="middle" fill="#111">renderer · Scene · Camera pillars</text>
+    <rect x="664" y="660" width="192" height="22" fill="#f5a623"/><text x="760" y="676" text-anchor="middle" fill="#111">Scene + Mesh build · skip if no headless-gl</text>
+    <rect x="944" y="660" width="192" height="22" fill="#666"/><text x="1040" y="676" text-anchor="middle" fill="#fff">visual regression · pixel-diff budget</text>
+
+    <!-- ML Inference -->
+    <text x="80" y="704" fill="#fff">ML Inference <tspan font-size="11" font-weight="500" opacity="0.55">· ONNX · safetensors · joblib</tspan></text>
+    <rect x="384" y="688" width="192" height="22" fill="#3ecf8e"/><text x="480" y="704" text-anchor="middle" fill="#111">magic-byte validation per ext</text>
+    <rect x="664" y="688" width="192" height="22" fill="#f5a623"/><text x="760" y="704" text-anchor="middle" fill="#111">InferenceSession run · skip if no ort</text>
+    <rect x="944" y="688" width="192" height="22" fill="#666"/><text x="1040" y="704" text-anchor="middle" fill="#fff">eval set · drift · regression on metric</text>
+
+    <!-- Media -->
+    <text x="80" y="732" fill="#fff">Media <tspan font-size="11" font-weight="500" opacity="0.55">· sharp · canvas · ffmpeg</tspan></text>
+    <rect x="384" y="716" width="192" height="22" fill="#3ecf8e"/><text x="480" y="732" text-anchor="middle" fill="#111">structural imports detected</text>
+    <rect x="664" y="716" width="192" height="22" fill="#f5a623"/><text x="760" y="732" text-anchor="middle" fill="#111">synth buffer → resize → PNG header</text>
+    <rect x="944" y="716" width="192" height="22" fill="#666"/><text x="1040" y="732" text-anchor="middle" fill="#fff">streaming · codec matrix · size budget</text>
+
+    <!-- Mobile -->
+    <text x="80" y="760" fill="#fff">Mobile <tspan font-size="11" font-weight="500" opacity="0.55">· Expo · RN · Capacitor</tspan></text>
+    <rect x="384" y="744" width="192" height="22" fill="#3ecf8e"/><text x="480" y="760" text-anchor="middle" fill="#111">expo.slug + dep semver</text>
+    <rect x="664" y="744" width="192" height="22" fill="#f5a623"/><text x="760" y="760" text-anchor="middle" fill="#111">app entry resolve · skip if minimal</text>
+    <rect x="944" y="744" width="192" height="22" fill="#666"/><text x="1040" y="760" text-anchor="middle" fill="#fff">store metadata · privacy manifest</text>
+
+    <!-- Desktop -->
+    <text x="80" y="788" fill="#fff">Desktop <tspan font-size="11" font-weight="500" opacity="0.55">· Electron · Tauri</tspan></text>
+    <rect x="384" y="772" width="192" height="22" fill="#3ecf8e"/><text x="480" y="788" text-anchor="middle" fill="#111">main entry · whenReady · loadURL</text>
+    <rect x="664" y="772" width="192" height="22" fill="#f5a623"/><text x="760" y="788" text-anchor="middle" fill="#111">electron --version semver · skip if absent</text>
+    <rect x="944" y="772" width="192" height="22" fill="#666"/><text x="1040" y="788" text-anchor="middle" fill="#fff">signing · update channel · crash report</text>
+  </g>
+
+  <!-- Group label: LLM CHAT -->
+  <text x="80" y="826" font-family="Inter,Arial" font-size="11" font-weight="700" fill="#fff" opacity="0.45" letter-spacing="2">LLM CHAT (when /chat-style route detected)</text>
+
+  <g font-family="Inter,Arial" font-size="13" font-weight="700">
+    <text x="80" y="854" fill="#fff">LLM Chat <tspan font-size="11" font-weight="500" opacity="0.55">· openai · anthropic · cohere</tspan></text>
+    <rect x="384" y="838" width="192" height="22" fill="#3ecf8e"/><text x="480" y="854" text-anchor="middle" fill="#111">chat route + completion call</text>
+    <rect x="664" y="838" width="192" height="22" fill="#3ecf8e"/><text x="760" y="854" text-anchor="middle" fill="#111">mocked client · POST /chat &lt; 500</text>
+    <rect x="944" y="838" width="192" height="22" fill="#3ecf8e"/><text x="1040" y="854" text-anchor="middle" fill="#111">eval · fallback · budget · registry · stream</text>
+  </g>
+
+  <!-- Bottom strip: cross-cutting spine -->
+  <rect x="80" y="884" width="1120" height="38" fill="#fff" opacity="0.92"/>
+  <text x="640" y="908" font-family="Inter,Arial" font-size="13" font-weight="800" fill="#111" text-anchor="middle">CROSS-CUTTING SPINE · tests · build · CI · security headers · secrets scan · evidence-weighted scoring · QA memory · verification-repair loop</text>
 </svg>

@@ -5,6 +5,28 @@
 `demo2project` remains as a backwards-compatible CLI alias while the product
 brand moves to MatrixOmnix.
 
+## Sibling project: [`d2p`](https://github.com/Hosico02/d2p) — the minimal agent-driven loop
+
+If you want the **same demo-to-product idea expressed in ~2.5k lines** without
+hardcoded "demo type" detectors, see [`Hosico02/d2p`](https://github.com/Hosico02/d2p).
+It runs Analyzer → Planner → parallel Executors → QA where the Analyzer
+searches the web for mature competitors itself and the agents work out what
+"product" means for the demo at hand. Zero code changes to add new domains.
+
+|  | MatrixOmnix (this repo) | [d2p](https://github.com/Hosico02/d2p) (sibling) |
+|---|---|---|
+| Lines of core code | ~41k TypeScript | ~4k Python |
+| Gap detection | 80+ hardcoded detectors organised in 3 honest tiers | pure LLM, no detectors |
+| Adding a new demo domain | author new detector + planner case + executor handler | zero code changes |
+| Stress / regression suite | **15/15 fixtures** product-ready, **737 vitest** tests | failing-tests-as-bug-reports corpus grows per run |
+| Inflation resistance | very strong (every gap path is engineered, every tier asks a stricter question than the last) | depends on LLM quality + rollback guards |
+| Default LLM cost per run | $0 (deterministic providers ship) | non-zero (every iteration is agent-driven) |
+| Best for | reproducible product baselines under engineered standards | exploratory, new-domain, agent-first runs |
+
+The two projects are complementary: MatrixOmnix's hardened pipeline gives
+strong inflation resistance on known archetypes; d2p's minimal loop gives
+zero-marginal-cost generalization to new ones.
+
 ## Quickstart
 
 ```bash
@@ -88,9 +110,35 @@ The current system is intentionally strict about evidence:
 - Broad deterministic backlogs can expand to six planned tasks in one round, so
   demos with many obvious productization gaps spend fewer iterations on
   mechanical setup while ordinary plans stay small.
-- The 12-fixture stress suite now reaches product-ready on 12/12 demo types:
+- The **15-fixture** stress suite now reaches product-ready on **15/15** demo types:
   UI SPA, API, CLI, LLM chat, game, WebGL/3D, ML inference, media pipeline,
-  browser extension, notebook, mobile and desktop.
+  browser extension, notebook, mobile, desktop, DB CRUD, multi-service repos
+  and standalone workers.
+- Every surface owns gates across **three honest tiers** —
+  **tier-1 structural contract** (always-on source-shape checks),
+  **tier-2 behavioural runtime** (exercises the surface end-to-end; amber when
+  the runtime lib is absent), and **tier-3 productization surface** (the
+  operational gates that separate a runtime-passing demo from a productized
+  app: error envelope, streaming response, prompt-eval harness, provider
+  failure fallback, token budget, prompt template registry, etc.).
+- **LLM chat full productization suite** (5/5) now gates `tests/prompts/*.json`
+  golden eval cases, mocked-provider failure fallback returning structured 5xx,
+  `MAX_MESSAGE_LENGTH` guard, `prompts/` template registry and `streaming.py`
+  SSE endpoint — driven by detection of a real `/chat`-style HTTP surface,
+  not just an LLM dep (so LLM-backed simulation servers don't get
+  misclassified as chat demos).
+- **API operational maturity** (kickoff): `missing_api_error_envelope` now
+  fires when a Flask app has no `@app.errorhandler`, and the handler ships
+  a 404 + Exception handler plus `tests/test_error_envelope.py` that asserts
+  `{error, message, status}` JSON shape on both paths.
+- **Node parity** for Config and Worker runtime gates: when no Python entry
+  is detected, `writeConfigRuntimeLoadTest` and `writeWorkerRuntimeEnqueueTest`
+  fall back to emitting `node:test` harnesses for `.js/.mjs/.ts` config
+  modules and worker entries (file-queue, enqueue-fn or bare-drain shapes).
+- **`callsExternalService` walks depth-1 cross-module imports** — a handler
+  that proxies through `from .services import llm_call` is now correctly
+  classified as externally-reaching when the SDK import lives in
+  `services.py`.
 - agent-facing social deduction demos now get a dedicated maturity model, so
   MatrixOmnix can preserve the multi-agent theater premise while still gating
   rules, model/provider configuration, replay, evaluation and observability.
@@ -212,7 +260,15 @@ before Executor can mutate the wrong project surface.
 ## Harness Coverage
 
 MatrixOmnix treats a "product" as a set of verified contracts, not a prettier
-demo. Current harness families include:
+demo. Every surface is gated across three honest tiers:
+
+| Tier | What it asks |
+|---|---|
+| **1 · Structural contract** | Always-on. Does the source actually look like this surface? (route decorators parsed, manifest schema valid, ML model has the right magic bytes, expo.slug is URL-safe, etc.) |
+| **2 · Behavioural runtime** | Exercises the surface end-to-end (test_client hits every route, NotebookClient executes cells, sharp resizes a 16×16 buffer and checks the PNG signature, InferenceSession loads the model and runs). Specialized surfaces honestly skip-with-diagnostic when the runtime lib is absent. |
+| **3 · Productization surface** | Operational maturity above runtime: error envelope, prompt-eval harness, provider failure fallback, token budget, prompt template registry, streaming response, etc. |
+
+Current harness families include:
 
 - **Single-file intake/runtime** — captures `demo.py`, `app.js`, `index.html`
   and similar raw entries before expansion.
@@ -246,6 +302,19 @@ demo. Current harness families include:
   per-session model/provider settings, deterministic rule tests, prompt
   guardrails, replay/transcript artifacts, simulation/evaluation harnesses and
   observer-facing workflows.
+- **LLM chat productization suite** — when a real `/chat`-style HTTP route
+  is detected (not just an LLM dep), gates prompt-eval harness, mocked
+  provider failure fallback returning structured 5xx, `MAX_MESSAGE_LENGTH`
+  guard, `prompts/` template registry, and SSE streaming endpoint via a
+  generated `streaming.py`. LLM-backed simulation servers (background loops
+  with no chat surface) are explicitly excluded from this suite.
+- **API operational maturity** — structured error envelope gate
+  (`@app.errorhandler` returning `{error, message, status}` JSON for both
+  404 and uncaught exception paths, with `tests/test_error_envelope.py`
+  asserting the shape). Suppressed on multi-service repos where the
+  cross-service integration check subsumes it. First slice of a longer
+  operational-maturity roadmap (rate limit / OpenAPI / retry+backoff /
+  dead-letter / bundle and a11y budgets to follow as bounded gates).
 
 ---
 
@@ -442,10 +511,13 @@ their claims are only accepted after local verification and scoring.
   deterministic scaffolds instead of model free edits. This remains a
   productization baseline rather than a claim that no human release review is
   needed.
-- The built-in stress suite now reports `12/12 product_ready` across UI, API,
-  CLI, LLM, game, 3D, ML, media, browser extension, notebook, mobile and
-  desktop demo fixtures. Specialized surfaces get behavior-level workflow
-  repairs instead of stopping at docs and contract harnesses.
+- The built-in stress suite now reports `15/15 product_ready` across UI, API,
+  CLI, LLM, game, 3D, ML, media, browser extension, notebook, mobile, desktop,
+  DB CRUD, multi-service repos and standalone workers. Specialized surfaces
+  get behavior-level workflow repairs instead of stopping at docs and
+  contract harnesses, and every surface ships a tier-1 structural check that
+  fails on wrapper-only or placeholder demos so "test passed" can't be
+  reached by emitting an empty `tests/__init__.py`.
 
 ---
 

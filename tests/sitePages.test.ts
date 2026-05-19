@@ -26,9 +26,12 @@ describe('MatrixOmnix site', () => {
     expect(app).not.toContain('data-demo-upload');
     expect(app).not.toContain('type="file"');
     expect(app).not.toContain('Receive a product zip');
-    expect(app).toContain('framework-loop.svg');
-    expect(app).toContain('harness-map.svg');
-    expect(app).toContain('deployment-flow.svg');
+    // Diagram filenames must still appear in App.vue. Format-agnostic (svg or png)
+    // because we render the same three concepts as raster exports when generated
+    // by an external image tool and as vector files when authored in-repo.
+    expect(app).toMatch(/framework-loop\.(svg|png|webp|jpg)/);
+    expect(app).toMatch(/harness-map\.(svg|png|webp|jpg)/);
+    expect(app).toMatch(/deployment-flow\.(svg|png|webp|jpg)/);
     expect(app).toContain('Why it exists');
     expect(app).toContain('What we do not claim yet');
     expect(app).toContain('source-cited market research must produce real capabilities');

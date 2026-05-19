@@ -337,7 +337,47 @@ export async function analyzeGaps(
       ),
     );
   }
+  // Operational maturity gate: API surfaces must produce a structured JSON
+  // error envelope for every unhandled exception. Bare HTML 404/500 pages or
+  // string error responses leak internals and break client error handling.
+  // Suppressed for multi-service repos (subsumed by the cross-service test)
+  // and when no single-file Flask app.py is present (handler can't operate).
+  if (
+    isApiBearingProject(snapshot, files, pkg, projectSurfaceText) &&
+    appPy.length > 0 &&
+    /\bFlask\s*\(/.test(appPy) &&
+    !detectMultiServiceLayout(files) &&
+    !hasApiErrorEnvelope(appPy, files) &&
+    !(await hasApiErrorEnvelopeTest(snapshot.project_path, files))
+  ) {
+    findings.push(
+      finding(
+        'missing_api_error_envelope',
+        'medium',
+        'API has no structured error envelope',
+        'When a handler raises or the framework returns a 404/500, productized APIs respond with a consistent JSON envelope (e.g. {"error": "...", "status": ...}) — not an HTML page or a bare string. The current project has no registered errorhandler / exception_handler and no test asserting a structured error body for failure paths.',
+        'Register @app.errorhandler(Exception) (Flask) / @app.exception_handler (FastAPI) that returns jsonify({"error": type(exc).__name__, "message": str(exc), "status": 500}), 500 — plus a 404 handler. Add tests/test_error_envelope.py that drives a known-error route and asserts the JSON shape.',
+        ['app.py', 'tests/test_error_envelope.py'],
+      ),
+    );
+  }
   const envVarNames = detectEnvVars(projectSurfaceText);
+  if (
+    envVarNames.length > 0 &&
+    !detectMultiServiceLayout(files) &&
+    !(await hasConfigRuntimeLoadTest(snapshot.project_path, files))
+  ) {
+    findings.push(
+      finding(
+        'missing_config_runtime_load_test',
+        'high',
+        'Environment configuration has no runtime load test',
+        `Project reads environment variables (${envVarNames.slice(0, 6).join(', ')}${envVarNames.length > 6 ? ', …' : ''}) but no test imports the config/app module with synthetic env values and asserts the loading code path runs. A productized demo must prove its env-var-driven configuration actually parses end-to-end, not only that .env.example documents the keys.`,
+        'Add tests/test_config_runtime.py (or tests/config-runtime.test.mjs) that sets every detected env var to a synthetic value via monkeypatch.setenv (Python) or process.env assignment (Node), imports the main config/app module and asserts the parsed values flow through without raising.',
+        ['tests/test_config_runtime.py', 'tests/config-runtime.test.mjs'],
+      ),
+    );
+  }
   if (envVarNames.length > 0 && !hasConfigContractHarness(files, scripts)) {
     findings.push(
       finding(
@@ -359,6 +399,67 @@ export async function analyzeGaps(
         'Database demos need an explicit migration and schema boundary before d2p can safely add features that persist state.',
         'Add docs/data-contract.md, scripts/data-contract-check.mjs and a data:contract-check script that verifies schema or migration evidence exists.',
         ['docs/data-contract.md', 'scripts/data-contract-check.mjs', 'package.json'],
+      ),
+    );
+  }
+  if (
+    isApiBearingProject(snapshot, files, pkg, projectSurfaceText) &&
+    !detectMultiServiceLayout(files) &&
+    !(await hasApiRuntimeBehaviourTest(snapshot.project_path, files))
+  ) {
+    findings.push(
+      finding(
+        'missing_api_runtime_behaviour_test',
+        'blocker',
+        'API surface has no runtime behaviour test',
+        'API demos pass contract scans by exposing route declarations in source, while no test actually invokes any of those routes through a test client. A productized API must prove at least one route is reachable end-to-end: the test must boot the app with isolated config, fire an HTTP request, and assert the handler executed (status code, response shape).',
+        'Add a test that loads the application (Flask app.test_client(), FastAPI TestClient, Express supertest, Hono app.fetch, Fastify app.inject), calls at least one detected route, and asserts the handler actually ran. Do not rely on regex scans of source files.',
+        ['tests/test_api_runtime.py', 'tests/api-runtime.test.mjs'],
+      ),
+    );
+  }
+  if (
+    isDataBearingProject(files, pkg, projectSurfaceText) &&
+    hasRawSqlCrudSource(projectSurfaceText + '\n' + appPy) &&
+    !(await hasDbCrudRoundTripTest(snapshot.project_path, files))
+  ) {
+    findings.push(
+      finding(
+        'missing_db_crud_runtime_tests',
+        'blocker',
+        'CRUD data layer has no runtime round-trip test',
+        'Database demos pass contract checks while no test actually inserts a row, fetches it back and deletes it. A productized CRUD demo must prove persistence works end-to-end against a real (isolated) database before iteration touches schema or migrations.',
+        'Add a test that points the app at an isolated database (in-memory SQLite or a temp file), runs INSERT then SELECT then DELETE through the application API, and asserts the data round-trips correctly.',
+        ['tests/test_db_crud_roundtrip.py', 'app.py'],
+      ),
+    );
+  }
+  const multiServiceLayout = detectMultiServiceLayout(files);
+  if (multiServiceLayout && !(await hasMultiServiceIntegrationCheck(snapshot.project_path, files))) {
+    findings.push(
+      finding(
+        'missing_multi_service_integration_check',
+        'blocker',
+        'Multi-service repository has no cross-service integration check',
+        `Repository contains multiple service surfaces (${multiServiceLayout.services.join(', ')}) but no test or script proves a request actually flows between them. Without one, agents can edit api/, worker/, web/ in isolation and silently break the seams that make the demo a product.`,
+        'Add tests/test_multi_service_integration.py (or scripts/multi-service-integration-check.mjs) that exercises the producer service (e.g. POST to api/), drives the consumer service (e.g. invokes the worker code path), and asserts state propagates end-to-end.',
+        ['tests/test_multi_service_integration.py', 'docs/multi-service-contract.md', ...multiServiceLayout.entrypoints],
+      ),
+    );
+  }
+  if (
+    isWorkerBearingProject(files, pkg, projectSurfaceText) &&
+    !detectMultiServiceLayout(files) &&
+    !(await hasWorkerRuntimeEnqueueTest(snapshot.project_path, files))
+  ) {
+    findings.push(
+      finding(
+        'missing_worker_runtime_enqueue_test',
+        'high',
+        'Background worker has no runtime enqueue/drain test',
+        'Worker demos pass contract scans by exposing job/task/queue declarations in source, while no test actually enqueues a job, drains the worker and asserts the side effect. A productized worker must prove its job-processing code path runs end-to-end.',
+        'Add tests/test_worker_runtime.py that enqueues a synthetic job (write to QUEUE_PATH, push to an in-memory queue, or call a Celery task with .apply()), invokes the worker entry function (drain_once, process_job, run_worker, …) and asserts the expected side effect (RESULT_PATH populated, return value non-zero, queue drained).',
+        ['tests/test_worker_runtime.py'],
       ),
     );
   }
@@ -397,6 +498,21 @@ export async function analyzeGaps(
         'Extension demos need explicit manifest, popup/background/content and permission boundaries before productization changes are safe.',
         'Add docs/browser-extension-contract.md, scripts/browser-extension-contract-check.mjs and an extension:contract-check script.',
         ['docs/browser-extension-contract.md', 'scripts/browser-extension-contract-check.mjs', 'package.json'],
+      ),
+    );
+  }
+  if (
+    deliverySurfaces.some((surface) => surface.id === 'notebook') &&
+    !(await hasNotebookRuntimeExecutionTest(snapshot.project_path, files))
+  ) {
+    findings.push(
+      finding(
+        'missing_notebook_runtime_execution_test',
+        'high',
+        'Notebook demo has no runtime execution test',
+        'Notebook demos pass contract scans by exposing parseable JSON cells, while no test actually runs the notebook end-to-end. A productized notebook must prove every cell executes without error against a reproducible kernel — not just that the JSON parses.',
+        'Add tests/test_notebook_runtime.py that loads the .ipynb file with nbformat and executes it through nbclient.NotebookClient (or papermill / jupyter nbconvert --execute), then asserts no cell raised an exception.',
+        ['tests/test_notebook_runtime.py'],
       ),
     );
   }
@@ -469,6 +585,111 @@ export async function analyzeGaps(
         'ML demos need model/framework evidence and sample input/output boundaries before agents safely change UI, APIs or packaging.',
         'Add docs/ml-model-contract.md, scripts/ml-model-contract-check.mjs and an ml:contract-check script.',
         ['docs/ml-model-contract.md', 'scripts/ml-model-contract-check.mjs', 'package.json'],
+      ),
+    );
+  }
+  if (
+    deliverySurfaces.some((surface) => surface.id === 'ml_model') &&
+    !(await hasSpecializedRuntimeTest(snapshot.project_path, files, ML_INFERENCE_TEST_RE))
+  ) {
+    findings.push(
+      finding(
+        'missing_ml_model_runtime_inference_test',
+        'high',
+        'ML model demo has no runtime inference test',
+        'ML demos pass contract scans by referencing onnxruntime / sklearn / torch / tensorflow / keras imports in source, while no test actually loads a model and runs inference. A productized ML pipeline must prove its inference code path runs end-to-end against synthetic input.',
+        'Add tests/ml-runtime.test.mjs (Node) or tests/test_ml_runtime.py (Python) that loads the project\'s model artifact via the appropriate library (onnxruntime-node InferenceSession.create, joblib.load, torch.load, etc.), runs inference on a tiny synthetic input, and asserts the output shape/values are sane. Gracefully skip when the library cannot be loaded in the test environment.',
+        ['tests/ml-runtime.test.mjs', 'tests/test_ml_runtime.py'],
+      ),
+    );
+  }
+  if (
+    deliverySurfaces.some((surface) => surface.id === 'game_demo') &&
+    !(await hasSpecializedRuntimeTest(snapshot.project_path, files, GAME_RUNTIME_INVOCATION_RE))
+  ) {
+    findings.push(
+      finding(
+        'missing_game_runtime_loop_test',
+        'high',
+        'Game demo has no runtime game-loop test',
+        'Game demos pass contract scans by referencing Phaser / pygame / canvas imports in source, while no test actually invokes the game-loop tick. A productized game must prove its update/render cycle executes without crashing.',
+        'Add tests/game-runtime.test.mjs (Node) or tests/test_game_runtime.py (Python) that instantiates the game engine in headless mode (Phaser.Game with headless renderer, pygame.init() + one render frame, canvas + requestAnimationFrame), runs one update tick, and asserts no exception. Skip gracefully when the engine cannot run in the test environment.',
+        ['tests/game-runtime.test.mjs', 'tests/test_game_runtime.py'],
+      ),
+    );
+  }
+  if (
+    deliverySurfaces.some((surface) => surface.id === 'three_d_scene') &&
+    !(await hasSpecializedRuntimeTest(snapshot.project_path, files, THREE_D_RUNTIME_INVOCATION_RE))
+  ) {
+    findings.push(
+      finding(
+        'missing_3d_scene_runtime_render_test',
+        'high',
+        '3D scene demo has no runtime render test',
+        '3D / WebGL demos pass contract scans by referencing THREE / OrbitControls / GLTFLoader imports in source, while no test actually creates a scene and renders one frame. A productized 3D pipeline must prove the WebGL/Three.js render code path runs end-to-end.',
+        'Add tests/scene-runtime.test.mjs that constructs a tiny THREE.Scene + Camera + Mesh, calls renderer.render() once (using headless-gl or jsdom canvas), and asserts the render call completed. Skip gracefully when a WebGL context cannot be created.',
+        ['tests/scene-runtime.test.mjs'],
+      ),
+    );
+  }
+  if (
+    deliverySurfaces.some((surface) => surface.id === 'browser_extension') &&
+    !(await hasSpecializedRuntimeTest(snapshot.project_path, files, BROWSER_EXT_RUNTIME_INVOCATION_RE))
+  ) {
+    findings.push(
+      finding(
+        'missing_browser_extension_runtime_manifest_test',
+        'high',
+        'Browser extension demo has no runtime manifest validation test',
+        'Extension demos pass contract scans by listing chrome.runtime / browser.runtime in source, while no test actually loads manifest.json, validates its schema, or launches a headless browser with --load-extension. A productized extension must prove its manifest is valid against the chrome-extension spec and that the background/content scripts wire up.',
+        'Add tests/extension-runtime.test.mjs that reads manifest.json, asserts required fields (manifest_version, name, version, plus permissions/background/content_scripts coherence), and (optionally) launches a headless chromium with --load-extension to assert the service worker registers. Skip the headless launch gracefully when Playwright is unavailable.',
+        ['tests/extension-runtime.test.mjs'],
+      ),
+    );
+  }
+  if (
+    deliverySurfaces.some((surface) => surface.id === 'mobile_app') &&
+    !(await hasSpecializedRuntimeTest(snapshot.project_path, files, MOBILE_RUNTIME_INVOCATION_RE))
+  ) {
+    findings.push(
+      finding(
+        'missing_mobile_runtime_bundle_test',
+        'high',
+        'Mobile app demo has no runtime bundle/registration test',
+        'Mobile demos pass contract scans by listing expo / react-native in package.json, while no test actually invokes the bundler or asserts that the root component registers. A productized mobile app must prove its entry registers with the native runtime and at least its JS bundle parses.',
+        'Add tests/mobile-runtime.test.mjs that asserts app.json is well-formed (Expo manifest), the root component registers (registerRootComponent or AppRegistry.registerComponent), and (optionally) `npx expo export` produces a non-empty bundle. Skip the export gracefully when the CLI is unavailable.',
+        ['tests/mobile-runtime.test.mjs'],
+      ),
+    );
+  }
+  if (
+    deliverySurfaces.some((surface) => surface.id === 'desktop_app') &&
+    !(await hasSpecializedRuntimeTest(snapshot.project_path, files, DESKTOP_RUNTIME_INVOCATION_RE))
+  ) {
+    findings.push(
+      finding(
+        'missing_desktop_runtime_boot_test',
+        'high',
+        'Desktop app demo has no runtime boot test',
+        'Desktop demos pass contract scans by referencing BrowserWindow / electron / Tauri in source, while no test actually invokes electron / cargo to boot the shell. A productized desktop app must prove its entry executes without crashing — at minimum that the framework binary launches and reports a version.',
+        'Add tests/desktop-runtime.test.mjs that spawns the electron / tauri binary with --version (or with a 1-second auto-quit harness) and asserts a non-zero version string is returned. Skip gracefully when the framework binary is not installed.',
+        ['tests/desktop-runtime.test.mjs'],
+      ),
+    );
+  }
+  if (
+    deliverySurfaces.some((surface) => surface.id === 'media_pipeline') &&
+    !(await hasMediaPipelineRuntimeTest(snapshot.project_path, files))
+  ) {
+    findings.push(
+      finding(
+        'missing_media_pipeline_runtime_test',
+        'high',
+        'Media pipeline demo has no runtime encode/decode test',
+        'Media demos pass contract scans by referencing sharp / ffmpeg / canvas / Pillow imports in source, while no test actually invokes the media library on a synthetic input. A productized media pipeline must prove its transform code path runs end-to-end against a real buffer.',
+        'Add tests/media-runtime.test.mjs (or tests/test_media_runtime.py) that constructs a tiny synthetic input (e.g., sharp({ create: { width: 16, height: 16, channels: 3, background: { r: 0, g: 0, b: 0 } } })), pipes it through the demo\'s transform, and asserts the output buffer/file is non-empty.',
+        ['tests/media-runtime.test.mjs', 'tests/test_media_runtime.py'],
       ),
     );
   }
@@ -769,6 +990,70 @@ export async function analyzeGaps(
         ),
       );
     }
+    // LLM chat full suite: surface a productized LLM app needs more than just
+    // provider config — eval harness, provider failure fallback, token budget
+    // enforcement, prompt template registry are all distinct gates that
+    // separate a demo from a product.
+    if (isLlmChatDemo(pkg, llmSurfaceText) && !(await hasLlmPromptEvalHarness(snapshot.project_path, files))) {
+      findings.push(
+        finding(
+          'missing_llm_prompt_eval_harness',
+          'high',
+          'LLM chat demo has no prompt evaluation harness',
+          'Productized LLM apps must pin prompt behaviour against a fixed set of golden cases so model swaps and prompt edits do not silently regress. The current project ships an LLM-backed handler with no `tests/prompts/*.json` fixtures and no harness that runs them through the chat endpoint with a mocked provider.',
+          'Add tests/prompts/*.json golden cases (input messages + expected response shape) and tests/test_prompt_eval.py that iterates each case, drives /chat with the input through a mocked OpenAI/Anthropic client, and asserts the response shape and required keys.',
+          ['tests/test_prompt_eval.py', 'tests/prompts/'],
+        ),
+      );
+    }
+    if (isLlmChatDemo(pkg, llmSurfaceText) && !(await hasLlmProviderFailureFallback(snapshot.project_path, files))) {
+      findings.push(
+        finding(
+          'missing_llm_provider_failure_fallback',
+          'high',
+          'LLM chat handler has no provider-failure fallback test',
+          'A productized LLM chat handler must degrade gracefully when the upstream provider returns 5xx, rate-limits, or times out — not crash with a 500. No test in the current project patches the provider client to raise and asserts the handler returns a graceful 5xx/4xx status with a structured error body.',
+          'Add tests/test_provider_fallback.py that monkeypatches the LLM client class (e.g. `app.OpenAI`) so its create() call raises an APIError/TimeoutError, drives /chat, and asserts the handler returns 502/503/429 with a structured error payload — not 500. Drives the handler implementation toward wrapping the provider call in try/except.',
+          ['tests/test_provider_fallback.py', 'app.py'],
+        ),
+      );
+    }
+    if (isLlmChatDemo(pkg, llmSurfaceText) && !(await hasLlmTokenBudgetEnforcement(snapshot.project_path, files))) {
+      findings.push(
+        finding(
+          'missing_llm_token_budget_enforcement',
+          'medium',
+          'LLM chat handler has no token / input-size budget enforcement',
+          'A productized LLM chat handler must reject inputs that exceed its token budget before they reach the provider — otherwise a single oversized request can blow through cost, latency and provider error quotas. The current project has neither an explicit `max_message_length` / `tiktoken` guard in source nor a test that sends an oversized message and asserts a 400/413/422 response.',
+          'Either add a request-size guard in the chat handler (max char/token check) and a test that exercises it, OR add tests/test_token_budget.py that POSTs a message exceeding 50K characters and asserts the handler returns 400/413/422 (not 500 or a successful provider call).',
+          ['tests/test_token_budget.py', 'app.py'],
+        ),
+      );
+    }
+    if (isLlmChatDemo(pkg, llmSurfaceText) && !(await hasLlmStreamingResponse(snapshot.project_path, files))) {
+      findings.push(
+        finding(
+          'missing_llm_streaming_response',
+          'medium',
+          'LLM chat demo has no streaming response surface',
+          'Productized LLM chat handlers should stream tokens back to the client (SSE / chunked transfer) — synchronous-only responses block the UI for the entire generation, hide errors until completion, and prevent cancellation. The current project has no route that returns text/event-stream and no chat completion call with stream=True.',
+          'Add a streaming endpoint (e.g. POST /chat/stream) that calls the LLM with stream=True and yields each chunk via Server-Sent Events. Add tests/test_streaming.py that drives the endpoint with a mocked streaming client and asserts the text/event-stream content type plus the `data:` framing.',
+          ['streaming.py', 'tests/test_streaming.py', 'app.py'],
+        ),
+      );
+    }
+    if (isLlmChatDemo(pkg, llmSurfaceText) && !(await hasLlmPromptTemplateRegistry(snapshot.project_path, files))) {
+      findings.push(
+        finding(
+          'missing_llm_prompt_template_registry',
+          'medium',
+          'LLM chat demo has no prompt template registry',
+          'Productized LLM apps version their prompts. Inline prompt strings inside handler functions cannot be reviewed, A/B tested, swapped per model, or rolled back independently of code. The current project has no `prompts/` directory of template files and no `prompts.py` registry module that the handler imports.',
+          'Extract inline system/user prompts into prompts/*.txt (or prompts.py module) and have the handler load them by name. Add at least one template + a unit test that asserts the registry exposes the named template.',
+          ['prompts/', 'prompts.py', 'tests/test_prompt_registry.py'],
+        ),
+      );
+    }
     if (hasBrokenLlmProviderSelectContract(templateText, llmConfigText)) {
       findings.push(
         finding(
@@ -826,7 +1111,11 @@ export async function analyzeGaps(
     'desktop_app',
     'browser_extension',
   ].includes(surface));
-  if (isFrontendUiApp(snapshot, files, pkg) && !hasNonWebProductSurface) {
+  const hasContentRichSsrUi = await hasServerRenderedHtmlUi(snapshot, files);
+  const isWebUiSurface =
+    (isFrontendUiApp(snapshot, files, pkg) || hasContentRichSsrUi) &&
+    !hasNonWebProductSurface;
+  if (isWebUiSurface) {
     productMaturity = await assessWebUiProductMaturity(snapshot.project_path, files, pkg);
     if (!hasUiProductVerification(files, scripts)) {
       findings.push(
@@ -1014,6 +1303,7 @@ export async function analyzeGaps(
     findings.push(...marketGaps.findings);
     productMaturity = mergeProductMaturity(productMaturity, marketGaps.product_maturity);
   }
+  await addBehavioralDepthFindings(findings, snapshot, files, pkg);
   addVerificationFailureFindings(findings, snapshot, score);
 
   const agentMisjudgments = auditAgentMisjudgments({
@@ -1055,6 +1345,521 @@ export async function analyzeGaps(
     product_maturity: productMaturity,
     agent_misjudgments: agentMisjudgments.length > 0 ? agentMisjudgments : undefined,
   };
+}
+
+/**
+ * Behavioral-depth gates: detect when the "has tests" surface is satisfied
+ * by trivial smoke (1+1, ast.parse-only) or by scaffolded product-core stubs
+ * that never touch the original demo entrypoint. These findings are the
+ * direct counter to the inflation pattern where executors satisfy the
+ * presence-of-tests gate without proving any product behavior.
+ */
+async function addBehavioralDepthFindings(
+  findings: GapFinding[],
+  snapshot: ProjectSnapshot,
+  files: string[],
+  pkg: PackageLike,
+): Promise<void> {
+  const testFiles = files.filter(isBehavioralTestFile);
+  if (testFiles.length === 0) return;
+  const testTexts: Array<{ file: string; text: string }> = [];
+  for (const file of testFiles.slice(0, 60)) {
+    const text = await readTextSafe(path.join(snapshot.project_path, file));
+    if (text !== null) testTexts.push({ file, text });
+  }
+  if (testTexts.length === 0) return;
+
+  const classification = classifyBehavioralTests(testTexts);
+  const entrypoints = collectDemoEntrypoints(files, pkg);
+  const exercisesEntrypoint = entrypoints.length > 0
+    ? testTexts.some(({ text, file }) => testExercisesEntrypoint(text, file, entrypoints))
+    : false;
+
+  if (classification.meaningfulFiles.length === 0) {
+    findings.push(
+      finding(
+        'trivial_smoke_test_only',
+        'high',
+        'Tests are present but only contain trivial smoke or scaffolded product-core assertions',
+        'Demos that satisfy "has tests" with 1+1 smoke, ast.parse-only checks or scaffolded product-core stubs do not prove any product behavior; the harness gives false confidence and downstream regressions ship undetected.',
+        'Add at least one test that imports or invokes the actual demo entrypoint (App.vue, index.html, app.py, the CLI entry, etc.) and asserts a non-trivial behavior — not a re-assertion of scaffolded helpers.',
+        entrypoints.length > 0 ? entrypoints : classification.trivialFiles.slice(0, 4),
+      ),
+    );
+  }
+
+  if (entrypoints.length > 0 && !exercisesEntrypoint) {
+    findings.push(
+      finding(
+        'demo_entrypoint_not_exercised_by_tests',
+        'blocker',
+        'No test imports or loads the original demo entrypoint',
+        'Productized demos must verify the real demo surface. Tests that only exercise scaffolded product-core stubs, generic file presence or unrelated helpers cannot catch regressions in the entrypoint a user actually runs (App.vue, app.py, the CLI, etc.).',
+        'Add a test that imports the demo entrypoint module (e.g. `import app` for a Flask demo) or asserts the rendered/served output of the actual demo entrypoint. Browser-driven specs that load the page also satisfy this gate.',
+        entrypoints,
+      ),
+    );
+  }
+}
+
+function isBehavioralTestFile(file: string): boolean {
+  return /\.(test|spec)\.(ts|tsx|js|jsx|mjs|cjs)$/.test(file) ||
+    /(^|\/)test_[^/]+\.py$/.test(file) ||
+    /_test\.py$/.test(file) ||
+    /(^|\/)tests?\/[^/]+\.(ts|tsx|js|jsx|mjs|cjs|py)$/.test(file);
+}
+
+function classifyBehavioralTests(
+  testTexts: Array<{ file: string; text: string }>,
+): { meaningfulFiles: string[]; trivialFiles: string[] } {
+  const meaningful: string[] = [];
+  const trivial: string[] = [];
+  for (const { file, text } of testTexts) {
+    if (isTrivialOrScaffoldTest(file, text)) trivial.push(file);
+    else meaningful.push(file);
+  }
+  return { meaningfulFiles: meaningful, trivialFiles: trivial };
+}
+
+function isTrivialOrScaffoldTest(file: string, text: string): boolean {
+  // Scaffolded product-core tests prove only that scaffold returned its own
+  // capabilities; they do not exercise the real demo. Treat as non-meaningful
+  // even when they contain assertions.
+  if (/(^|\/)product-core\.test\.(mjs|js|ts)$/i.test(file)) return true;
+  if (/(^|\/)test_product_core\.py$/i.test(file)) return true;
+
+  const stripped = text
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|\s)\/\/[^\n]*/g, '')
+    .replace(/(^|\s)#[^\n]*/g, '$1')
+    .trim();
+  if (!stripped) return true;
+
+  // Node trivial smoke: only arithmetic / identity assertions, no other test body
+  if (
+    /\bimport\b/.test(stripped) &&
+    !/(import|require)[\s(].*\.(?:vue|tsx|jsx|mjs|cjs|js|ts|html|py)/.test(stripped) &&
+    !/from\s+['"]\.\.?\/[^'"]+['"]/.test(stripped) &&
+    /test\s*\(\s*['"][^'"]*['"]\s*,\s*\(/.test(stripped)
+  ) {
+    const meaningfulAssertions = stripped.match(/assert(?:\.[a-zA-Z]+)?\s*\(/g) ?? [];
+    const trivialOnly = stripped
+      .match(/assert(?:\.[a-zA-Z]+)?\s*\([^)]*\)/g)
+      ?.every((a) => /\b(1\s*\+\s*1\s*,\s*2|true\s*,\s*true|2\s*,\s*2)\b/.test(a)) ?? false;
+    if (meaningfulAssertions.length > 0 && trivialOnly) return true;
+  }
+
+  // Python ast.parse-only smoke
+  if (/^import\s+ast\b/m.test(stripped) && /\bast\.parse\b/.test(stripped)) {
+    const hasBehavior = /\b(?:from|import)\s+(?!ast\b|pathlib\b|os\b|sys\b|importlib\b|json\b|typing\b|__future__\b)([a-zA-Z_][a-zA-Z_0-9]*)\b/.test(stripped) ||
+      /\.test_client\(\)|\bclient\.(get|post|put|delete|patch)|response\.status_code|response\.get_json/.test(stripped) ||
+      /\bspec_from_file_location\b|\bmodule_from_spec\b|\bexec_module\b/.test(stripped);
+    if (!hasBehavior) return true;
+  }
+
+  return false;
+}
+
+function collectDemoEntrypoints(files: string[], pkg: PackageLike): string[] {
+  const candidates = [
+    'app.py', 'server.py', 'main.py', 'wsgi.py', 'manage.py',
+    'cli.py', 'bot.py', 'agent.py', 'pipeline.py', 'index.py',
+    'app.js', 'app.mjs', 'app.ts', 'server.js', 'server.mjs', 'server.ts',
+    'index.js', 'index.mjs', 'index.ts',
+    'index.html',
+    'src/App.vue', 'src/App.tsx', 'src/App.jsx', 'src/App.js',
+    'src/main.ts', 'src/main.js', 'src/main.tsx', 'src/main.jsx', 'src/main.mjs',
+    'src/index.ts', 'src/index.tsx', 'src/index.js', 'src/index.mjs',
+    'src/app.py', 'src/server.py', 'src/main.py',
+    'app/page.tsx', 'app/page.js', 'app/layout.tsx',
+    'pages/index.tsx', 'pages/index.jsx', 'pages/index.js',
+    'bin/cli.js', 'bin/cli.mjs', 'bin/cli.ts', 'bin/index.js', 'bin/index.mjs',
+    'extension/manifest.json', 'manifest.json',
+  ];
+  const out = new Set<string>();
+  for (const c of candidates) if (files.includes(c)) out.add(c);
+  if (pkg && pkg.bin !== undefined && pkg.bin !== null) {
+    if (typeof pkg.bin === 'string' && pkg.bin.trim().length > 0) {
+      out.add(pkg.bin.replace(/^\.\//, ''));
+    } else if (typeof pkg.bin === 'object') {
+      for (const v of Object.values(pkg.bin as Record<string, string>)) {
+        if (typeof v === 'string' && v.trim().length > 0) out.add(v.replace(/^\.\//, ''));
+      }
+    }
+  }
+  return Array.from(out).slice(0, 16);
+}
+
+function testExercisesEntrypoint(text: string, file: string, entrypoints: string[]): boolean {
+  // Browser-driven specs (Playwright/Cypress) load the entrypoint page indirectly.
+  if (/\b(?:page|browser)\.(?:goto|newPage|visit)\b/.test(text) && text.length > 200) return true;
+  if (/\bcy\.visit\b|\bcy\.get\b/.test(text)) return true;
+  // Tests that dynamically resolve the entrypoint via package.json bin/main also count.
+  if (/\b(?:pkg|package)\.bin\b/.test(text) && /package\.json/.test(text)) return true;
+  if (/\bpkg\.main\b/.test(text) && /package\.json/.test(text)) return true;
+  // Tests that walk the source tree and assert on file content satisfy the gate:
+  // they reject empty/trivial demos generically without naming a fixed entrypoint.
+  if (/\b(?:fs\.)?readdirSync\b/.test(text) && /\b(?:fs\.)?readFileSync\b/.test(text)) return true;
+  // Python tests that resolve the entrypoint via importlib spec on a discovered path.
+  if (/\bspec_from_file_location\b/.test(text) && /\bcandidates\b/.test(text)) return true;
+  for (const ep of entrypoints) {
+    const base = ep.replace(/\.(py|mjs|cjs|js|jsx|ts|tsx|vue|html|json)$/, '');
+    const moduleName = base.split('/').pop() ?? base;
+    const pathish = base.split('/').slice(-2).join('/');
+    if (ep.endsWith('.py')) {
+      // Python: match `import app` or `from app import ...`
+      const re = new RegExp(`\\b(?:from|import)\\s+${escapeBehavioralRegex(moduleName)}\\b`);
+      if (re.test(text)) return true;
+      // Or importlib spec_from_file_location pointing at the entry filename
+      if (text.includes(`"${ep}"`) || text.includes(`'${ep}'`) || text.includes(`/${ep}`)) return true;
+    } else if (/\.(vue|tsx|jsx|js|ts|mjs|cjs)$/.test(ep)) {
+      // JS/TS: file path appears in import or readFileSync, or module name imported
+      if (text.includes(ep) || text.includes(`/${ep}`)) return true;
+      const reFile = new RegExp(`['"]\\.{0,2}/[^'"]*${escapeBehavioralRegex(moduleName)}(?:\\.[a-zA-Z]+)?['"]`);
+      if (reFile.test(text)) return true;
+      const rePath = new RegExp(`['"]\\.{0,2}/[^'"]*${escapeBehavioralRegex(pathish)}(?:\\.[a-zA-Z]+)?['"]`);
+      if (rePath.test(text)) return true;
+    } else if (ep.endsWith('.html')) {
+      if (text.includes(ep) || /readFileSync[^)]*index\.html|fs\.read[^)]*index\.html/.test(text)) return true;
+    }
+  }
+  // Conservative final pass: tests that explicitly reference a source path under src/ or app/ root.
+  if (/readFileSync\([^)]*\b(?:src|app|pages|server|api|routes)\b\//.test(text)) return true;
+  return false;
+}
+
+function escapeBehavioralRegex(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+interface MultiServiceLayout {
+  services: string[];
+  entrypoints: string[];
+}
+
+function detectMultiServiceLayout(files: string[]): MultiServiceLayout | null {
+  const candidateDirs = ['api', 'worker', 'workers', 'web', 'frontend', 'ui', 'client', 'server', 'service', 'services', 'backend', 'consumer', 'producer', 'jobs'];
+  const entryPatterns: Array<{ rx: RegExp; lang: 'py' | 'js' | 'html' }> = [
+    { rx: /^(?:src\/)?(?:app|server|main|worker|handler|consumer|producer)\.py$/i, lang: 'py' },
+    { rx: /^(?:src\/)?(?:app|server|main|worker|handler|index|consumer|producer)\.(?:js|mjs|cjs|ts|tsx|jsx)$/i, lang: 'js' },
+    { rx: /^(?:src\/)?index\.html$/i, lang: 'html' },
+  ];
+  const services: Array<{ dir: string; entry: string }> = [];
+  for (const dir of candidateDirs) {
+    const inDir = files.filter((f) => f.startsWith(`${dir}/`));
+    if (inDir.length === 0) continue;
+    let entry: string | null = null;
+    for (const { rx } of entryPatterns) {
+      const found = inDir.find((f) => rx.test(f.slice(dir.length + 1)));
+      if (found) { entry = found; break; }
+    }
+    if (!entry) {
+      // Accept any non-test source file as a fallback entry.
+      const found = inDir.find((f) => /\.(py|js|mjs|cjs|ts|tsx|jsx|html)$/i.test(f) && !/(^|\/)(tests?|__tests__|spec)\//.test(f));
+      if (found) entry = found;
+    }
+    if (entry) services.push({ dir, entry });
+  }
+  if (services.length < 2) return null;
+  return {
+    services: services.map((s) => s.dir),
+    entrypoints: services.map((s) => s.entry),
+  };
+}
+
+async function hasMultiServiceIntegrationCheck(root: string, files: string[]): Promise<boolean> {
+  const testFiles = files.filter(isBehavioralTestFile);
+  const candidateScripts = files.filter((f) => /^scripts\/[^/]*(?:multi-service|integration|e2e|cross-service)[^/]*\.(?:mjs|cjs|js|ts|py|sh)$/i.test(f));
+  const candidates = [...testFiles, ...candidateScripts];
+  for (const file of candidates.slice(0, 80)) {
+    const text = await readTextSafe(path.join(root, file));
+    if (!text) continue;
+    const importsTwoServices = countCrossServiceImports(text) >= 2;
+    const hitsTwoServices = countCrossServiceFileReads(text) >= 2;
+    const exercisesProducerAndConsumer = /client\.(?:post|put)\s*\(\s*f?['"]/.test(text) && /(drain_once|process_jobs|worker\.|enqueue|run_worker|handle_job|consumer\.|process_one)/i.test(text);
+    if (importsTwoServices || hitsTwoServices || exercisesProducerAndConsumer) return true;
+  }
+  return false;
+}
+
+function countCrossServiceImports(text: string): number {
+  const candidateDirs = ['api', 'worker', 'workers', 'web', 'frontend', 'ui', 'client', 'server', 'service', 'services', 'backend', 'consumer', 'producer', 'jobs'];
+  const hit = new Set<string>();
+  for (const dir of candidateDirs) {
+    const reA = new RegExp(`\\bfrom\\s+${escapeBehavioralRegex(dir)}(?:\\.[\\w_.]+)?\\s+import\\b`);
+    const reB = new RegExp(`\\bimport\\s+${escapeBehavioralRegex(dir)}(?:\\.[\\w_.]+)?\\b`);
+    const reC = new RegExp(`['"](?:\\./)?${escapeBehavioralRegex(dir)}/`);
+    if (reA.test(text) || reB.test(text) || reC.test(text)) hit.add(dir);
+  }
+  return hit.size;
+}
+
+function countCrossServiceFileReads(text: string): number {
+  const candidateDirs = ['api', 'worker', 'workers', 'web', 'frontend', 'ui', 'client', 'server', 'service', 'services', 'backend', 'consumer', 'producer', 'jobs'];
+  const hit = new Set<string>();
+  for (const dir of candidateDirs) {
+    const re = new RegExp(`['"](?:[^'"]*/)?${escapeBehavioralRegex(dir)}/[^'"]+['"]`);
+    if (re.test(text)) hit.add(dir);
+  }
+  return hit.size;
+}
+
+async function hasSpecializedRuntimeTest(root: string, files: string[], invocationRe: RegExp): Promise<boolean> {
+  const testFiles = files.filter(isBehavioralTestFile);
+  if (testFiles.length === 0) return false;
+  for (const file of testFiles.slice(0, 80)) {
+    const text = await readTextSafe(path.join(root, file));
+    if (!text) continue;
+    if (invocationRe.test(text)) return true;
+  }
+  return false;
+}
+
+// Detection of "real" runtime invocations per specialized surface. Each is
+// matched against test source text; presence means a runtime test exists.
+const ML_INFERENCE_TEST_RE = /(?:onnxruntime-(?:node|web)|InferenceSession\.(?:create|run)|joblib\.load\s*\(|deserialize_model\s*\(|torch\.load\s*\(|tf\.saved_model\.load\s*\(|import\s*\(\s*['"]onnxruntime-(?:node|web)['"]\))/;
+const GAME_RUNTIME_INVOCATION_RE = /(?:Phaser\.Game\s*\(|new\s+Phaser\.Game|game\.scene\.start\s*\(|pygame\.init\s*\(|requestAnimationFrame\s*\([\s\S]{0,200}?(?:update|tick|render)|gameLoop\s*\(\s*\)|import\s*\(\s*['"]phaser['"]\)|Phaser\.(?:Game|AUTO|HEADLESS))/;
+const THREE_D_RUNTIME_INVOCATION_RE = /(?:THREE\.(?:WebGLRenderer|Scene|PerspectiveCamera|Mesh)|new\s+THREE\.|renderer\.render\s*\(|gl\.drawArrays\s*\(|gl\.drawElements\s*\(|createContext\s*\(\s*['"]webgl|import\s*\(\s*['"]three['"]\))/;
+const BROWSER_EXT_RUNTIME_INVOCATION_RE = /(?:chrome\.runtime\.(?:onMessage|sendMessage)|browser\.runtime\.|JSON\.parse\([\s\S]{0,200}?manifest\.json|readFileSync\([\s\S]{0,200}?manifest\.json|chromium\.launch\([\s\S]{0,200}?load-extension|manifest_version)/;
+const MOBILE_RUNTIME_INVOCATION_RE = /(?:expo\s+export|react-native\s+bundle|spawnSync\s*\(\s*['"](?:expo|react-native)['"]|@expo\/cli\/build|appJson\.expo|expo\.slug|registerRootComponent\s*\()/;
+const DESKTOP_RUNTIME_INVOCATION_RE = /(?:electron\.app\.(?:whenReady|on)|electron-builder|spawnSync\s*\(\s*['"]electron['"]|new\s+BrowserWindow\s*\(|app\.getVersion\s*\(|require\s*\(\s*['"]electron['"]\)\s*\.app|import\s*\(\s*['"]electron['"]\)|electronBin)/;
+
+async function hasMediaPipelineRuntimeTest(root: string, files: string[]): Promise<boolean> {
+  const testFiles = files.filter(isBehavioralTestFile);
+  if (testFiles.length === 0) return false;
+  // A real media runtime test exercises sharp / ffmpeg / canvas / Pillow at
+  // least once on a synthetic input and asserts a non-empty output buffer or
+  // file. Pure regex scans of source for `sharp(` do NOT count.
+  const invocationRe = /(?:sharp\s*\([\s\S]{0,400}?\.(?:toBuffer|toFile)\s*\(|ffmpeg\s*\([\s\S]{0,400}?\.(?:save|pipe|run)\s*\(|new\s+OfflineAudioContext\s*\(|createCanvas\s*\([\s\S]{0,200}?getContext\s*\(|Image\.open\s*\([\s\S]{0,200}?\.(?:save|tobytes|resize)\s*\(|wave\.open\s*\(|spawn(?:Sync)?\s*\(\s*['"]ffmpeg['"])/;
+  for (const file of testFiles.slice(0, 80)) {
+    const text = await readTextSafe(path.join(root, file));
+    if (!text) continue;
+    if (invocationRe.test(text)) return true;
+  }
+  return false;
+}
+
+function isLlmChatDemo(pkg: PackageLike, sourceText: string): boolean {
+  const deps = { ...(pkg?.dependencies ?? {}), ...(pkg?.devDependencies ?? {}) };
+  const llmDeps = ['openai', 'anthropic', '@anthropic-ai/sdk', 'cohere-ai', '@google/generative-ai', 'langchain', 'llama-index', 'ollama'];
+  const hasLlmDep = llmDeps.some((d) => d in deps);
+  const hasLlmCall = /\bfrom\s+openai\s+import\b|\bimport\s+openai\b|\bfrom\s+anthropic\s+import\b|\bclient\.chat\.completions\.create\s*\(|\bclient\.messages\.create\s*\(|\bclient\.completions\.create\s*\(/.test(sourceText);
+  if (!hasLlmDep && !hasLlmCall) return false;
+  return hasLlmChatStyleRoute(sourceText);
+}
+
+function hasLlmChatStyleRoute(sourceText: string): boolean {
+  // A "chat route" reads a user message AND returns the LLM completion
+  // synchronously. We require both signals so that LLM-backed simulation
+  // servers (whose handlers kick off a background task that calls the LLM,
+  // but return immediately) are not misclassified as chat demos.
+  const routeRe = /@(?:app|router|api|bp|blueprint)\.(?:post|route)\s*\([^)]*\)\s*\n\s*(?:async\s+)?def\s+\w+\s*\([^)]*\)\s*:\s*([\s\S]*?)(?=\n@(?:app|router|api|bp|blueprint)\.|\nif\s+__name__|$)/g;
+  const chatCallRe = /(?:client|llm|openai_client|anthropic_client)\.(?:chat\.completions|messages|completions)\.create\s*\(|\bchat\.completions\.create\s*\(/;
+  const readsMessageRe = /\b(?:body|payload|data|request_json|json_data)\.get\(\s*['"](?:message|prompt|query|input|text|content|question)['"]/;
+  const returnsCompletionRe = /\breturn\s+(?:jsonify\s*\(|Response\s*\()[\s\S]{0,400}?(?:choices\[0\]|message\.content|\bcontent\b|response|reply|\bcompletion\b)/;
+  let m: RegExpExecArray | null;
+  while ((m = routeRe.exec(sourceText)) !== null) {
+    const handlerBody = m[1] ?? '';
+    if (!chatCallRe.test(handlerBody)) continue;
+    // Top-level chat call (not nested inside a def that's the background task)
+    // AND reads a message-style field AND returns the completion downstream.
+    const topLevelCall = /^[ \t]{4,8}(?:[\w_]+\s*=\s*)?(?:client|llm|openai_client|anthropic_client)\.(?:chat\.completions|messages|completions)\.create\s*\(/m.test(handlerBody);
+    if (!topLevelCall) continue;
+    if (!readsMessageRe.test(handlerBody)) continue;
+    if (!returnsCompletionRe.test(handlerBody)) continue;
+    return true;
+  }
+  return false;
+}
+
+async function hasLlmPromptEvalHarness(root: string, files: string[]): Promise<boolean> {
+  const hasEvalTestFile = files.some((f) => /^tests\/(?:test_prompt_eval\.py|prompt-eval\.test\.mjs)$/.test(f));
+  if (!hasEvalTestFile) return false;
+  // Eval harness needs at least one golden fixture (.json case under tests/prompts/).
+  const hasFixtures = files.some((f) => /^tests\/prompts\/[^/]+\.json$/.test(f));
+  if (!hasFixtures) return false;
+  // And the test must actually iterate over cases (proves it's a harness, not a stub).
+  for (const f of files.filter((x) => /^tests\/(?:test_prompt_eval\.py|prompt-eval\.test\.mjs)$/.test(x))) {
+    const text = await readTextSafe(path.join(root, f));
+    if (!text) continue;
+    if (/for\s+\w+\s+in\s+\w+|\.forEach\s*\(|for\s+(?:const|let)\s+\w+\s+of\s+/.test(text)) return true;
+  }
+  return false;
+}
+
+async function hasLlmProviderFailureFallback(root: string, files: string[]): Promise<boolean> {
+  const testFiles = files.filter(isBehavioralTestFile);
+  for (const file of testFiles.slice(0, 80)) {
+    const text = await readTextSafe(path.join(root, file));
+    if (!text) continue;
+    // Must: install a patched provider that raises + assert handler returns a non-crashing graceful status.
+    const patchesProvider = /(?:monkeypatch\.setattr|with\s+patch\s*\(|@patch\s*\(|vi\.mock\s*\()[\s\S]{0,200}?(?:OpenAI|Anthropic|chat\.completions|messages\.create)/.test(text);
+    const raisesOnPatched = /side_effect\s*=\s*(?:Exception|RuntimeError|APIError|TimeoutError|Mock[\s\S]{0,50}?Exception|lambda[^:]*:\s*\(?\s*(?:raise|.*Error))|raise\s+(?:Exception|RuntimeError|APIError|TimeoutError)/.test(text);
+    const assertsGracefulStatus = /status_code\s*(?:==|in\s*[\[\(])[\s\S]{0,80}?\b(?:5\d{2}|429|502|503|504)\b/.test(text);
+    if (patchesProvider && raisesOnPatched && assertsGracefulStatus) return true;
+  }
+  return false;
+}
+
+async function hasLlmTokenBudgetEnforcement(root: string, files: string[]): Promise<boolean> {
+  // Two paths: explicit input-size guard in source, OR a test that exercises an oversized payload.
+  const sourceFiles = files.filter((f) => /^(?:app\.py|main\.py|src\/[^/]+\.(?:py|js|mjs|ts))$/.test(f));
+  for (const f of sourceFiles) {
+    const text = await readTextSafe(path.join(root, f));
+    if (!text) continue;
+    if (/\bmax_message_length\b|\bmax_input_length\b|\bMAX_(?:MESSAGE|INPUT|PROMPT)_(?:LENGTH|TOKENS|CHARS|SIZE)\b|tiktoken\.(?:encoding|get_encoding)|message_too_long/.test(text)) return true;
+  }
+  const testFiles = files.filter(isBehavioralTestFile);
+  for (const f of testFiles.slice(0, 80)) {
+    const text = await readTextSafe(path.join(root, f));
+    if (!text) continue;
+    // Test sends an oversized input AND asserts a rejection status (400 / 413 / 422).
+    const sendsOversized = /['"]\s*\*\s*\d{4,}\b|"\w*"\s*\*\s*\d{4,}\b|len\(\s*['"][^'"]+['"]\s*\)\s*\*\s*\d{3,}|"x"\s*\*\s*(?:50_?000|100_?000|10_?000)/.test(text);
+    const assertsRejection = /status_code\s*(?:==|in\s*[\[\(])[\s\S]{0,80}?\b(?:400|413|422|431)\b/.test(text);
+    if (sendsOversized && assertsRejection) return true;
+  }
+  return false;
+}
+
+async function hasLlmStreamingResponse(root: string, files: string[]): Promise<boolean> {
+  const sourceFiles = files.filter((f) => /^(?:app\.py|main\.py|streaming\.py|src\/[^/]+\.(?:py|js|mjs|ts))$/.test(f));
+  for (const f of sourceFiles) {
+    const text = await readTextSafe(path.join(root, f));
+    if (!text) continue;
+    // SSE in the response — generators returning text/event-stream OR FastAPI StreamingResponse,
+    // paired with a stream=True LLM call OR a yield-based generator.
+    const ssePresent = /mimetype\s*=\s*["']text\/event-stream["']|StreamingResponse\s*\(|Response\s*\([^)]*text\/event-stream/.test(text);
+    const streamingCall = /\bstream\s*=\s*True\b|\bstream\s*:\s*true\b/.test(text);
+    if (ssePresent && streamingCall) return true;
+  }
+  // A test that drives a streaming endpoint also proves the surface exists.
+  const testFiles = files.filter(isBehavioralTestFile);
+  for (const f of testFiles.slice(0, 80)) {
+    const text = await readTextSafe(path.join(root, f));
+    if (!text) continue;
+    if (/text\/event-stream/.test(text) && /(?:assert|expect)[\s\S]{0,200}?data:/.test(text)) return true;
+  }
+  return false;
+}
+
+async function hasLlmPromptTemplateRegistry(root: string, files: string[]): Promise<boolean> {
+  // Either a prompts/ directory with template files, or a prompts.py / prompts.js module
+  // that exposes named templates that source code imports by name.
+  const hasPromptsDir = files.some((f) => /^prompts\/[^/]+\.(?:txt|md|j2|jinja|tmpl|prompt)$/.test(f));
+  const hasPromptsModule = files.some((f) => /^(?:src\/)?prompts\.(?:py|js|mjs|ts)$/.test(f));
+  if (!hasPromptsDir && !hasPromptsModule) return false;
+  // Source must REFERENCE the templates, not inline 50+-char prompt strings.
+  const sourceFiles = files.filter((f) => /^(?:app\.py|main\.py|src\/[^/]+\.(?:py|js|mjs|ts))$/.test(f));
+  for (const f of sourceFiles) {
+    const text = await readTextSafe(path.join(root, f));
+    if (!text) continue;
+    if (/\b(?:from\s+prompts\s+import|import\s+prompts|load_prompt\s*\(|render_prompt\s*\(|readFileSync\s*\(\s*['"][^'"]*prompts\/|template_registry\s*\.|PROMPT_TEMPLATES\b)/.test(text)) return true;
+  }
+  return false;
+}
+
+async function hasNotebookRuntimeExecutionTest(root: string, files: string[]): Promise<boolean> {
+  const testFiles = files.filter(isBehavioralTestFile);
+  if (testFiles.length === 0) return false;
+  // A notebook runtime test executes the .ipynb end-to-end via nbclient,
+  // papermill or jupyter nbconvert --execute. Pure nbformat.read() without
+  // execution does NOT count — it only parses JSON.
+  const executionRe = /(?:NotebookClient\s*\(|nbclient\.execute\s*\(|papermill\.execute_notebook\s*\(|nbconvert\s+.*--execute|jupyter\s+nbconvert\s+.*--execute|nbformat\.read[\s\S]{0,200}?execute\s*\()/;
+  for (const file of testFiles.slice(0, 80)) {
+    const text = await readTextSafe(path.join(root, file));
+    if (!text) continue;
+    if (executionRe.test(text)) return true;
+  }
+  return false;
+}
+
+async function hasWorkerRuntimeEnqueueTest(root: string, files: string[]): Promise<boolean> {
+  const testFiles = files.filter(isBehavioralTestFile);
+  if (testFiles.length === 0) return false;
+  // A behavioural worker test does at least one of:
+  //   - calls a worker entry function (drain_once, process_job, handle_job, run_worker, process_one, work_loop, consume)
+  //   - applies a Celery task synchronously (.apply()/.s().apply(), eager mode)
+  //   - drives a Bull/BullMQ queue and waits for completion
+  //   - imports the worker module's queue and calls its add()/enqueue() then drains
+  const callRe = /(?:\b(?:drain_once|process_job|handle_job|run_worker|process_one|work_loop|consume_(?:once|one)|run_once|tick|process_message)\s*\()|\.apply\s*\(\s*\)|\.apply_async\s*\(|\.delay\s*\(|task_always_eager|new\s+Worker\s*\(|queue\.add\s*\(|queue\.enqueue\s*\(/;
+  const importsWorkerRe = /\b(?:import\s+(?:worker|workers|jobs|tasks|scheduler)\b|from\s+(?:worker|workers|jobs|tasks|scheduler)\b|require\s*\(\s*['"](?:\.\.?\/)?(?:worker|workers|jobs|tasks|scheduler)['"]|importlib\.import_module\s*\(\s*['"](?:worker|workers|jobs|tasks|scheduler)['"])/;
+  for (const file of testFiles.slice(0, 80)) {
+    const text = await readTextSafe(path.join(root, file));
+    if (!text) continue;
+    if (callRe.test(text) && importsWorkerRe.test(text)) return true;
+    // Multi-service integration tests already exercise the worker; accept the cross-import shape there too.
+    if (countCrossServiceImports(text) >= 2 && callRe.test(text)) return true;
+  }
+  return false;
+}
+
+async function hasConfigRuntimeLoadTest(root: string, files: string[]): Promise<boolean> {
+  const testFiles = files.filter(isBehavioralTestFile);
+  if (testFiles.length === 0) return false;
+  // A meaningful config runtime test sets env vars before importing the
+  // module under test. We accept several common shapes:
+  //   Python:  monkeypatch.setenv("X", ...)           via pytest
+  //            os.environ["X"] = ...                  via stdlib unittest
+  //   Node:    process.env.X = ...                    bare assignment in test
+  //            vi.stubEnv("X", ...)                   vitest
+  //            sinon.stub(process, "env")             other
+  const envSetRe = /(?:monkeypatch\.setenv\s*\(|os\.environ\s*\[\s*['"][A-Z]|os\.environ\.setdefault\s*\(\s*['"][A-Z]|process\.env\.[A-Z][A-Z0-9_]+\s*=|vi\.stubEnv\s*\(|stubEnv\s*\()/;
+  const importsConfigRe = /\b(?:import\s+(?:app|config|settings|main|server|worker|workers|jobs|tasks|scheduler)\b|from\s+(?:app|config|settings|main|server|worker|workers|jobs|tasks|scheduler)\b|require\s*\(\s*['"](?:\.\.?\/)?(?:app|config|settings|main|server|worker|workers|jobs|tasks|scheduler)['"]|importlib\.import_module\s*\(\s*['"](?:app|config|settings|main|server|worker|workers|jobs|tasks|scheduler)['"]|spec_from_file_location\s*\(\s*['"](?:app|config|settings|main|server|worker|workers|jobs|tasks|scheduler)['"])/;
+  for (const file of testFiles.slice(0, 80)) {
+    const text = await readTextSafe(path.join(root, file));
+    if (!text) continue;
+    if (envSetRe.test(text) && importsConfigRe.test(text)) return true;
+  }
+  return false;
+}
+
+async function hasApiRuntimeBehaviourTest(root: string, files: string[]): Promise<boolean> {
+  const testFiles = files.filter(isBehavioralTestFile);
+  if (testFiles.length === 0) return false;
+  // Match real HTTP invocations through any common test-client shape.
+  // Flask/Starlette: app.test_client() then client.get/post/...
+  // FastAPI: TestClient(app).get/post(...)
+  // Express/Hono/Fastify: supertest(app).get(...), request(app).post(...), app.inject({...}), fetch(...) when an in-process server has been started.
+  const invocationRe = /(?:\bclient\.(?:get|post|put|delete|patch)\s*\(|\bTestClient\s*\(|\bsupertest\s*\(|\brequest\s*\(\s*\w+\s*\)|\bawait\s+\w+\.inject\s*\(|\bfetch\s*\(\s*['"]http:\/\/(?:127\.0\.0\.1|localhost):)/;
+  for (const file of testFiles.slice(0, 80)) {
+    const text = await readTextSafe(path.join(root, file));
+    if (!text) continue;
+    if (invocationRe.test(text)) return true;
+  }
+  return false;
+}
+
+async function hasDbCrudRoundTripTest(root: string, files: string[]): Promise<boolean> {
+  const testFiles = files.filter(isBehavioralTestFile);
+  if (testFiles.length === 0) return false;
+  for (const file of testFiles.slice(0, 80)) {
+    const text = await readTextSafe(path.join(root, file));
+    if (!text) continue;
+    // Either: raw DB usage in tests (insert + select/delete) proves a DB round trip.
+    const hasInsert = /\binsert\s+into\b/i.test(text);
+    const hasSelect = /\bselect\s+[\w*,\s]+\s+from\b/i.test(text);
+    const hasDelete = /\bdelete\s+from\b/i.test(text);
+    if (hasInsert && (hasSelect || hasDelete)) return true;
+    // Or: HTTP-level round trip — POST then GET (and ideally DELETE) against the same resource.
+    // Accept f-string template literals as well, since the resource segment is still literal.
+    const postPaths = collectFirstPathSegment(text, /client\.post\s*\(\s*f?['"]([^'"{]+)/g);
+    const getPaths = collectFirstPathSegment(text, /client\.get\s*\(\s*f?['"]([^'"{]+)/g);
+    const delPaths = collectFirstPathSegment(text, /client\.delete\s*\(\s*f?['"]([^'"{]+)/g);
+    const overlapsGet = [...postPaths].some((p) => getPaths.has(p));
+    const overlapsDel = [...postPaths].some((p) => delPaths.has(p));
+    if (overlapsGet && overlapsDel) return true;
+  }
+  return false;
+}
+
+function collectFirstPathSegment(text: string, pattern: RegExp): Set<string> {
+  const out = new Set<string>();
+  for (const match of text.matchAll(pattern)) {
+    const url = match[1] ?? '';
+    const seg = url.split('?')[0]!.replace(/^\/+/, '').split('/')[0] ?? '';
+    if (seg) out.add(seg);
+  }
+  return out;
 }
 
 function addVerificationFailureFindings(
@@ -1253,12 +2058,23 @@ export function auditAgentMisjudgments(input: MisjudgmentAuditInput): AgentMisju
     }
     if (
       (f.category === 'missing_ui_product_verification' ||
+        f.category === 'missing_ui_runtime_render_smoke' ||
         f.category === 'below_web_ui_product_maturity' ||
         f.category === 'ui_unimplemented_hosted_service_claim' ||
         f.category.startsWith('ui_')) &&
       !isUiBearingProject(input.snapshot, input.files, input.pkg)
     ) {
       add(f, 'UI finding lacked frontend dependencies, UI entrypoints or template/static UI files.');
+    }
+    if (
+      (f.category === 'missing_llm_prompt_eval_harness' ||
+        f.category === 'missing_llm_provider_failure_fallback' ||
+        f.category === 'missing_llm_token_budget_enforcement' ||
+        f.category === 'missing_llm_prompt_template_registry' ||
+        f.category === 'missing_llm_streaming_response') &&
+      !isLlmChatDemo(input.pkg, input.projectSurfaceText)
+    ) {
+      add(f, 'LLM chat finding lacked openai/anthropic/cohere SDK or chat-completion source evidence.');
     }
     if (f.category === 'missing_user_llm_provider_config' && !isOpenAICompatibleLlmDemo(input.projectSurfaceText)) {
       add(f, 'LLM provider-config finding lacked OpenAI-compatible client, key or model-provider evidence.');
@@ -1279,14 +2095,32 @@ export function auditAgentMisjudgments(input: MisjudgmentAuditInput): AgentMisju
     if (f.category === 'missing_api_contract_harness' && !isApiBearingProject(input.snapshot, input.files, input.pkg, input.projectSurfaceText)) {
       add(f, 'API harness finding lacked API framework, route declaration or api/ source evidence.');
     }
+    if (f.category === 'missing_api_runtime_behaviour_test' && !isApiBearingProject(input.snapshot, input.files, input.pkg, input.projectSurfaceText)) {
+      add(f, 'API runtime behaviour finding lacked API framework, route declaration or api/ source evidence.');
+    }
+    if (f.category === 'missing_api_runtime_behaviour_test' && detectMultiServiceLayout(input.files)) {
+      add(f, 'API runtime behaviour finding superseded by multi-service integration finding.');
+    }
     if (f.category === 'missing_config_contract_harness' && detectEnvVars(input.projectSurfaceText).length === 0) {
       add(f, 'Config harness finding lacked environment-variable usage in source/config files.');
+    }
+    if (f.category === 'missing_config_runtime_load_test' && detectEnvVars(input.projectSurfaceText).length === 0) {
+      add(f, 'Config runtime load finding lacked environment-variable usage in source/config files.');
+    }
+    if (f.category === 'missing_config_runtime_load_test' && detectMultiServiceLayout(input.files)) {
+      add(f, 'Config runtime load finding superseded by multi-service integration finding.');
     }
     if (f.category === 'missing_data_migration_harness' && !isDataBearingProject(input.files, input.pkg, input.projectSurfaceText)) {
       add(f, 'Data harness finding lacked ORM, schema, model or migration evidence.');
     }
     if (f.category === 'missing_worker_contract_harness' && !isWorkerBearingProject(input.files, input.pkg, input.projectSurfaceText)) {
       add(f, 'Worker harness finding lacked queue, scheduler, worker or jobs/task evidence.');
+    }
+    if (f.category === 'missing_worker_runtime_enqueue_test' && !isWorkerBearingProject(input.files, input.pkg, input.projectSurfaceText)) {
+      add(f, 'Worker runtime finding lacked queue, scheduler, worker or jobs/task evidence.');
+    }
+    if (f.category === 'missing_worker_runtime_enqueue_test' && detectMultiServiceLayout(input.files)) {
+      add(f, 'Worker runtime finding superseded by multi-service integration finding.');
     }
   }
   return audits;
@@ -1355,6 +2189,37 @@ function hasApiContractHarness(files: string[], scripts: Record<string, string>)
     /\bapi:contract-check\b|\bapi-contract-check\.mjs\b/.test(scriptBlob);
 }
 
+function hasApiErrorEnvelope(appPy: string, files: string[]): boolean {
+  // Flask registration patterns + jsonify return.
+  const flaskHandlerRe = /@app\.errorhandler\s*\(|app\.register_error_handler\s*\(/;
+  const fastapiHandlerRe = /@app\.exception_handler\s*\(/;
+  const honoErrorRe = /app\.(?:onError|notFound)\s*\(/;
+  const expressErrorRe = /app\.use\s*\(\s*function\s*\(\s*err\b|app\.use\s*\(\s*\(\s*err\s*,\s*req\s*,\s*res\s*,\s*next\s*\)/;
+  if (
+    flaskHandlerRe.test(appPy) ||
+    fastapiHandlerRe.test(appPy) ||
+    honoErrorRe.test(appPy) ||
+    expressErrorRe.test(appPy)
+  ) {
+    return true;
+  }
+  // Also look in dedicated error_handlers / errors module if present.
+  return files.some((f) => /^(?:errors|error_handlers|src\/errors|src\/error_handlers)\.(?:py|js|ts)$/.test(f));
+}
+
+async function hasApiErrorEnvelopeTest(root: string, files: string[]): Promise<boolean> {
+  const testFiles = files.filter((f) => /^tests\/(?:test_error_envelope\.py|error-envelope\.test\.mjs)$/.test(f));
+  for (const f of testFiles) {
+    const text = await readTextSafe(path.join(root, f));
+    if (!text) continue;
+    // The test must assert a JSON error shape on a failure response.
+    if (/status_code\s*(?:==|in)[^\n]{0,80}?(?:404|405|500)/.test(text) && /\b(?:error|message)['"]/.test(text)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function hasConfigContractHarness(files: string[], scripts: Record<string, string>): boolean {
   const scriptBlob = Object.entries(scripts).map(([k, v]) => `${k}:${v}`).join('\n');
   return files.includes('scripts/config-contract-check.mjs') &&
@@ -1364,9 +2229,20 @@ function hasConfigContractHarness(files: string[], scripts: Record<string, strin
 
 function isDataBearingProject(files: string[], pkg: PackageLike, sourceText: string): boolean {
   const deps = { ...(pkg?.dependencies ?? {}), ...(pkg?.devDependencies ?? {}) };
-  return ['prisma', '@prisma/client', 'drizzle-orm', 'typeorm', 'sequelize', 'mongoose', 'knex', 'sqlalchemy', 'alembic'].some((dep) => dep in deps) ||
+  return ['prisma', '@prisma/client', 'drizzle-orm', 'typeorm', 'sequelize', 'mongoose', 'knex', 'sqlalchemy', 'alembic', 'better-sqlite3'].some((dep) => dep in deps) ||
     files.some((f) => /^(migrations|prisma|db|database)\//.test(f) || /(^|\/)(schema\.prisma|models\.py|database\.py|db\.py)$/.test(f)) ||
-    /\b(create_engine|declarative_base|mongoose\.connect|new\s+PrismaClient|drizzle\(|knex\(|sequelize\.define)\b/.test(sourceText);
+    /\b(create_engine|declarative_base|mongoose\.connect|new\s+PrismaClient|drizzle\(|knex\(|sequelize\.define)\b/.test(sourceText) ||
+    hasRawSqlCrudSource(sourceText);
+}
+
+function hasRawSqlCrudSource(text: string): boolean {
+  // Catch stdlib SQLite / raw SQL CRUD demos that don't use a top-tier ORM.
+  if (!/\b(?:import\s+sqlite3|from\s+sqlite3|sqlite3\.connect|better-sqlite3|new\s+Database\s*\(|pg\.Client|psycopg2|pymongo|mysql\.connector|aiomysql|asyncpg)\b/.test(text)) {
+    return false;
+  }
+  const hasDdl = /\bCREATE\s+TABLE\b/i.test(text);
+  const hasDml = /\b(?:INSERT\s+INTO|UPDATE\s+\w+\s+SET|DELETE\s+FROM|SELECT\s+[\w*,\s]+\s+FROM)\b/i.test(text);
+  return hasDdl || hasDml;
 }
 
 function hasDataContractHarness(files: string[], scripts: Record<string, string>): boolean {
@@ -1526,6 +2402,7 @@ function needsProductCoreSpine(surfaceIds: string[]): boolean {
     'spa_ui',
     'api',
     'cli',
+    'worker',
     'browser_extension',
     'notebook',
     'mobile_app',
@@ -1609,8 +2486,16 @@ function hasIndustrialFlaskApiTests(testText: string, hasStartRoute: boolean): b
     return /invalid_mode|invalid mode|unsupported mode/i.test(testText) &&
       /too_many|active game|MAX_ACTIVE_GAMES|max_active_games/i.test(testText);
   }
-  return /invalid_text|missing_text|invalid_message|missing_message|bad request|400/.test(testText) &&
-    /\/summarize|\/chat|\/healthz|test_client\(/.test(testText);
+  if (
+    /invalid_text|missing_text|invalid_message|missing_message|bad request|400/.test(testText) &&
+    /\/summarize|\/chat|\/healthz|test_client\(/.test(testText)
+  ) return true;
+  // CRUD APIs prove industrial behavior via a real round-trip: POST → GET (asserts content) → DELETE → GET (asserts absence).
+  const hasPost = /client\.post\s*\(\s*f?['"]/.test(testText);
+  const hasGet = /client\.get\s*\(\s*f?['"]/.test(testText);
+  const hasDelete = /client\.delete\s*\(\s*f?['"]/.test(testText);
+  const hasAssertContent = /assert\s+fetched|assert\s+\w+\.get\(['"]\w+['"]\)\s*==|round[_-]?trip/i.test(testText);
+  return hasPost && hasGet && hasDelete && hasAssertContent;
 }
 
 function hasRegressionTests(files: string[], testText: string): boolean {
@@ -1701,6 +2586,50 @@ function isFrontendUiApp(
   return hasFrontendFramework && hasUiEntrypoint;
 }
 
+/**
+ * Detect server-rendered HTML UI where the product surface is a real, content-rich
+ * `templates/*.html` rendered by a server framework (Flask/Django/FastAPI Jinja,
+ * Express/Hono with template engine, Rails ERB, etc.) — not a 5-line landing page
+ * for an otherwise API-shaped service.
+ *
+ * Previously d2p only treated React/Vue/Next as "frontend UI app" and silently
+ * skipped the entire UI product maturity gate for SSR demos. This let real
+ * product UIs (e.g. werewolf-demo's 110KB Multi-Agent Theater interface) inflate
+ * to "product-ready" without Playwright smoke, responsive behavior, a11y, or
+ * loading/error state checks. We require the template payload to clear a
+ * minimum byte threshold so light API-landing pages don't get over-classified.
+ *
+ * Async because we sniff template sizes from disk. Callers in the gap-analyzer
+ * pipeline already run in an async context.
+ */
+async function hasServerRenderedHtmlUi(
+  snapshot: ProjectSnapshot,
+  files: string[],
+): Promise<boolean> {
+  const hasServerFramework = snapshot.detected_frameworks.some((f) =>
+    ['flask', 'django', 'fastapi', 'express', 'fastify', 'rails', 'sinatra', 'nestjs', 'hono'].includes(f.toLowerCase()),
+  );
+  if (!hasServerFramework) return false;
+  const templates = files.filter((f) =>
+    /^(templates|views|app\/templates)\/.*\.(html|jinja2?|j2|erb|hbs)$/i.test(f),
+  );
+  if (templates.length === 0) return false;
+  // Threshold: a serious SSR UI surface is at least 4KB of HTML in total across
+  // its top-level templates. A landing page that just says "API ready, see /docs"
+  // typically clocks 200-800 bytes and shouldn't drag the project into the SPA
+  // maturity gate.
+  const SSR_MIN_BYTES = 4000;
+  let total = 0;
+  for (const file of templates.slice(0, 16)) {
+    try {
+      const text = await readTextSafe(path.join(snapshot.project_path, file));
+      if (text) total += text.length;
+      if (total >= SSR_MIN_BYTES) return true;
+    } catch { /* ignore */ }
+  }
+  return total >= SSR_MIN_BYTES;
+}
+
 function isUiBearingProject(
   snapshot: ProjectSnapshot,
   files: string[],
@@ -1762,13 +2691,24 @@ function isAllowedCrossRuntimeHarnessScript(key: string, script = ''): boolean {
     'config:contract-check',
     'data:contract-check',
     'worker:contract-check',
+    'surface:contract-check',
+    'surface:depth-check',
+    'extension:contract-check',
+    'notebook:contract-check',
+    'mobile:contract-check',
+    'desktop:contract-check',
+    'game:contract-check',
+    '3d:contract-check',
+    'ml:contract-check',
+    'media:contract-check',
     'ui:check',
     'ui:render-check',
     'ui:e2e',
   ].includes(key)) {
     return true;
   }
-  return /\bnode\s+scripts\/(?:demo-runtime-check|cli-contract-check|api-contract-check|config-contract-check|data-contract-check|worker-contract-check)\.mjs\b/.test(script);
+  return /\bnode\s+scripts\/(?:demo-runtime-check|cli-contract-check|api-contract-check|config-contract-check|data-contract-check|worker-contract-check|surface-contract-check|browser-extension-contract-check|notebook-contract-check|mobile-contract-check|desktop-contract-check|game-contract-check|3d-scene-contract-check|ml-model-contract-check|media-pipeline-contract-check)\.mjs\b/.test(script) ||
+    /\bnode\s+--test\s+tests\/specialized-surface-depth\.test\.mjs\b/.test(script);
 }
 
 function isCliProject(
@@ -2586,8 +3526,8 @@ async function assessWebUiProductMaturity(
 ): Promise<ProductMaturityAssessment> {
   const implementationFiles = files.filter((f) =>
     /^(index\.html|package\.json|vite\.config\.(ts|js)|next\.config\.(ts|js|mjs))$/.test(f) ||
-    /^(src|app|pages|components|styles|tests|e2e)\//.test(f) &&
-      /\.(tsx|jsx|ts|js|vue|svelte|css|scss|sass|html)$/.test(f),
+    (/^(src|app|pages|components|styles|tests|e2e|templates|static|public)\//.test(f) &&
+      /\.(tsx|jsx|ts|js|vue|svelte|css|scss|sass|html|jinja2?)$/.test(f)),
   );
   const snippets = await Promise.all(
     implementationFiles.slice(0, 160).map(async (file) => `${file}\n${(await readTextSafe(path.join(root, file))) ?? ''}`),

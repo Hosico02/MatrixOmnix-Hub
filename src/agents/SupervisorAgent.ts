@@ -20,7 +20,11 @@ import { EventStore } from '../core/eventStore.js';
 import { EvidenceGraph } from '../core/evidenceGraph.js';
 import { CostTracker } from '../core/costTracker.js';
 import { IterationWorkspace } from '../core/iterationWorkspace.js';
-import { buildVerificationRepairTask } from '../core/verificationRepair.js';
+import { buildVerificationRepairTask, extractRootCauseHints } from '../core/verificationRepair.js';
+
+function extractRootCauseSignatures(text: string): string[] {
+  return extractRootCauseHints(text).map((h) => h.signature);
+}
 import {
   officialModelCatalogPath,
   refreshOfficialModelCatalog,
@@ -125,6 +129,16 @@ export class SupervisorAgent {
     let noProgressRounds = 0;
     let officialModelCatalogRefreshAttempted = false;
     let advisoryResearchAttempted = false;
+
+    /**
+     * Track repair attempts per failing verification command across iterations.
+     * When the same command fails 3+ times in a row with the same root-cause
+     * signature, we halt the iterate loop instead of burning more model calls
+     * on a problem the agent loop cannot diagnose. The user can then take over.
+     */
+    const repairAttempts = new Map<string, Array<{ summary: string; changed_files: string[]; signatures: string[] }>>();
+    const REPAIR_ABORT_THRESHOLD = 3;
+    let repairLoopAborted = false;
 
     const workspace = opts.useWorktree ? new IterationWorkspace(opts.projectPath) : null;
 
@@ -340,18 +354,66 @@ export class SupervisorAgent {
           const r = results[idx]!;
           allResults.push(r);
           const failedTask = slice[idx]!;
-          const repairTask = buildVerificationRepairTask(failedTask, r);
+          const failedEvidence = r.verification_evidence.find((e) => !e.passed);
+          const repairKey = failedEvidence ? failedEvidence.command : null;
+          const priorAttempts = repairKey ? repairAttempts.get(repairKey) ?? [] : [];
+          const repairTask = buildVerificationRepairTask(failedTask, r, {
+            consecutiveFailures: priorAttempts.length + 1,
+            priorAttempts: priorAttempts.map((a) => ({ summary: a.summary, changed_files: a.changed_files })),
+          });
           if (repairTask) {
+            if (repairKey && priorAttempts.length >= REPAIR_ABORT_THRESHOLD - 1) {
+              await store.append({
+                iteration_id: iterationId,
+                agent: 'supervisor',
+                event_type: 'note',
+                severity: 'high',
+                message: `repair loop abort: '${repairKey}' has failed ${priorAttempts.length + 1} times; halting iteration loop for human handoff`,
+                metadata: {
+                  failed_command: repairKey,
+                  prior_attempts: priorAttempts.length,
+                  threshold: REPAIR_ABORT_THRESHOLD,
+                },
+              });
+              graph.addEvidence({
+                type: 'note',
+                source_agent: 'supervisor',
+                content_summary: `repair_loop_aborted: '${repairKey}' failed ${priorAttempts.length + 1}x with no progress; prior root-causes: ${priorAttempts.flatMap((a) => a.signatures).slice(0, 4).join('; ') || 'none captured'}`,
+                confidence: 'high',
+                metadata: { failed_command: repairKey, prior_attempts: priorAttempts.length },
+              });
+              repairLoopAborted = true;
+              haltNormalTasks = true;
+              break;
+            }
             await store.append({
               iteration_id: iterationId,
               agent: 'supervisor',
               event_type: 'note',
               severity: 'high',
-              message: `verification failed; prioritizing repair task for "${failedTask.title}"`,
-              metadata: { failed_task_id: failedTask.id, repair_task_id: repairTask.id },
+              message: priorAttempts.length > 0
+                ? `verification failed (attempt ${priorAttempts.length + 1}/${REPAIR_ABORT_THRESHOLD}); escalating repair task for "${failedTask.title}"`
+                : `verification failed; prioritizing repair task for "${failedTask.title}"`,
+              metadata: { failed_task_id: failedTask.id, repair_task_id: repairTask.id, consecutive_failures: priorAttempts.length + 1 },
             });
             const repairResult = await runOne(repairTask);
             allResults.push(repairResult);
+            if (repairKey) {
+              const repairEvidence = repairResult.verification_evidence.find((e) => !e.passed);
+              if (repairEvidence) {
+                // Repair did not pass — record the attempt for the next iteration.
+                const signatures = extractRootCauseSignatures(`${repairEvidence.stdout_summary}\n${repairEvidence.stderr_summary}`);
+                const next = [...priorAttempts, {
+                  summary: repairResult.summary.slice(0, 240),
+                  changed_files: repairResult.changed_files,
+                  signatures,
+                }];
+                repairAttempts.set(repairKey, next);
+              } else {
+                // Repair succeeded — clear history for this command.
+                repairAttempts.delete(repairKey);
+              }
+            }
             haltNormalTasks = true;
             break;
           }
@@ -453,6 +515,16 @@ export class SupervisorAgent {
       // 8. stop conditions
       if (gapAfter.findings.length === 0 && gapAfter.blockers.length === 0) break;
       if (scoreAfter.grade === 'production_ready_baseline' && gapAfter.findings.length === 0 && gapAfter.blockers.length === 0) break;
+      if (repairLoopAborted) {
+        await store.append({
+          iteration_id: iterationId,
+          agent: 'supervisor',
+          event_type: 'note',
+          severity: 'high',
+          message: 'iteration loop terminated: repair_loop_aborted — the same verification failure recurred past the convergence threshold; human handoff required',
+        });
+        break;
+      }
       if (prevScore >= 0 && scoreAfter.total <= prevScore && fixedDefects === 0) {
         noProgressRounds++;
         if (noProgressRounds >= 2) break;
@@ -534,36 +606,58 @@ export class SupervisorAgent {
     }
     try {
       const snapshot = await this.analyzer.snapshot(opts.projectPath);
-      const domain = inferMarketResearchDomain(snapshot, await collectDomainInferenceText(opts.projectPath));
-      const query = defaultMarketResearchQuery(domain);
+      const inferenceText = await collectDomainInferenceText(opts.projectPath);
+      const primaryDomain = inferMarketResearchDomain(snapshot, inferenceText);
+      // When the project also has a real web UI surface (SSR or SPA), pull a
+      // second-domain research pass for `web_ui_app`. Without this, agent or
+      // API-shaped primary domains never surface UI capabilities (accessibility,
+      // responsive, onboarding, loading/error states) into advisory context.
+      const secondaryDomain = await inferSecondaryDomain(snapshot, opts.projectPath, primaryDomain);
       const provider = opts.advisory.searchProvider ?? new ControlledWebSearchProvider({
         systemRoot: opts.projectPath,
         allowNetwork: true,
       });
-      const report = await runMarketResearch({
-        projectPath: opts.projectPath,
-        domain,
-        query,
-        provider,
-        maxResults: 8,
-      });
-      await writeMarketResearchReport(opts.projectPath, report);
-      await store.append({
-        iteration_id: iterationId,
-        agent: 'advisory',
-        event_type: 'note',
-        severity: report.confidence === 'low' ? 'medium' : 'info',
-        message: `advisory market research refreshed for ${domain}: ${report.sources.length} source(s), ${report.capabilities.length} capability(ies)`,
-        metadata: {
-          advisory_research: 'refreshed',
-          domain,
-          query,
-          provider: provider.name,
-          source_count: report.sources.length,
-          capability_count: report.capabilities.length,
-          confidence: report.confidence,
-        },
-      });
+      const passes: Array<{ domain: typeof primaryDomain; query: string }> = [
+        { domain: primaryDomain, query: defaultMarketResearchQuery(primaryDomain) },
+      ];
+      if (secondaryDomain && secondaryDomain !== primaryDomain) {
+        passes.push({ domain: secondaryDomain, query: defaultMarketResearchQuery(secondaryDomain) });
+      }
+      let mergedReport: Awaited<ReturnType<typeof runMarketResearch>> | null = null;
+      for (const pass of passes) {
+        const report = await runMarketResearch({
+          projectPath: opts.projectPath,
+          domain: pass.domain,
+          query: pass.query,
+          provider,
+          maxResults: 8,
+        });
+        if (!mergedReport) {
+          mergedReport = report;
+        } else {
+          mergedReport.capabilities = dedupeCapabilities([...mergedReport.capabilities, ...report.capabilities]);
+          mergedReport.sources = dedupeSources([...mergedReport.sources, ...report.sources]);
+          mergedReport.query = `${mergedReport.query} | ${report.query}`;
+          if (report.confidence === 'low' || mergedReport.confidence === 'low') mergedReport.confidence = 'low';
+        }
+        await store.append({
+          iteration_id: iterationId,
+          agent: 'advisory',
+          event_type: 'note',
+          severity: report.confidence === 'low' ? 'medium' : 'info',
+          message: `advisory market research refreshed for ${pass.domain}: ${report.sources.length} source(s), ${report.capabilities.length} capability(ies)`,
+          metadata: {
+            advisory_research: 'refreshed',
+            domain: pass.domain,
+            query: pass.query,
+            provider: provider.name,
+            source_count: report.sources.length,
+            capability_count: report.capabilities.length,
+            confidence: report.confidence,
+          },
+        });
+      }
+      if (mergedReport) await writeMarketResearchReport(opts.projectPath, mergedReport);
     } catch (err) {
       await store.append({
         iteration_id: iterationId,
@@ -750,6 +844,67 @@ function domainSignalRank(file: string): number {
   if (/README|game|rules|prompts|player|main|app/i.test(file)) return 0;
   if (/src|templates|docs/i.test(file)) return 1;
   return 2;
+}
+
+/**
+ * Pick a secondary research domain when the project has a real UI surface
+ * underneath a non-UI primary domain (agent_social_deduction_theater,
+ * api_service, cli_tool, ...). Without this pass, advisory critics never see
+ * UI-product capabilities like accessibility, responsive layout or
+ * loading/error states even when the project ships a content-rich web UI.
+ *
+ * The secondary research is added on top of the primary; capabilities are
+ * deduped into one merged report so advisory roles get a single union view.
+ */
+async function inferSecondaryDomain(
+  snapshot: Awaited<ReturnType<AnalyzerAgent['snapshot']>>,
+  projectPath: string,
+  primaryDomain: ReturnType<typeof inferMarketResearchDomain>,
+): Promise<ReturnType<typeof inferMarketResearchDomain> | null> {
+  if (primaryDomain === 'web_ui_app' || primaryDomain === 'saas_app') return null;
+  const files = await listFiles(projectPath, 400);
+  const hasServerFramework = snapshot.detected_frameworks.some((f) =>
+    ['flask', 'django', 'fastapi', 'express', 'fastify', 'rails', 'sinatra', 'nestjs', 'hono'].includes(f.toLowerCase()),
+  );
+  const hasFrontendFramework = snapshot.detected_frameworks.some((f) =>
+    ['react', 'next', 'vue', 'svelte'].includes(f.toLowerCase()),
+  );
+  const templates = files.filter((f) => /^(templates|views|app\/templates)\/.*\.(html|jinja2?|j2|erb|hbs)$/i.test(f));
+  const spaEntrypoints = files.filter((f) =>
+    /^(src\/)?App\.(tsx|jsx|ts|js|vue|svelte)$/.test(f) || f === 'index.html',
+  );
+  if (hasFrontendFramework && spaEntrypoints.length > 0) return 'web_ui_app';
+  if (hasServerFramework && templates.length > 0) {
+    let total = 0;
+    for (const file of templates.slice(0, 8)) {
+      const text = await readTextSafe(path.join(projectPath, file));
+      if (text) total += text.length;
+      if (total >= 4000) return 'web_ui_app';
+    }
+  }
+  return null;
+}
+
+function dedupeCapabilities<T extends { id: string }>(items: T[]): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const item of items) {
+    if (seen.has(item.id)) continue;
+    seen.add(item.id);
+    out.push(item);
+  }
+  return out;
+}
+
+function dedupeSources<T extends { url: string }>(items: T[]): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const item of items) {
+    if (seen.has(item.url)) continue;
+    seen.add(item.url);
+    out.push(item);
+  }
+  return out;
 }
 
 function dedupe<T>(arr: T[]): T[] {

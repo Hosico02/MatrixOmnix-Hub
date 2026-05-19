@@ -77,17 +77,38 @@ export function redact(text: string): string {
 }
 
 /**
- * Summarize stdout/stderr: redact, then trim to maxLines + maxChars.
+ * Summarize stdout/stderr: redact, then trim to maxLines + maxChars. When
+ * trimming a long output, scan the omitted middle for concrete root-cause
+ * signal lines (ImportError, NameError, SyntaxError, etc.) so downstream
+ * agents (root cause extractor, failure taxonomy) can still see them.
+ *
+ * Performance: we iterate lines once and check each against a tight regex.
+ * For 50k-line pytest outputs this is ~30ms; the previous middle-slice
+ * dropped concrete error trace lines into the omit gap.
  */
 export function summarizeOutput(text: string, maxLines = 40, maxChars = 4000): string {
   if (!text) return '';
   const redacted = redact(text);
   const lines = redacted.split('\n');
-  let trimmed = lines.length > maxLines
-    ? [...lines.slice(0, Math.floor(maxLines / 2)),
-       `... [omitted ${lines.length - maxLines} lines] ...`,
-       ...lines.slice(-Math.ceil(maxLines / 2))].join('\n')
-    : redacted;
+  let trimmed: string;
+  if (lines.length <= maxLines) {
+    trimmed = redacted;
+  } else {
+    const headCount = Math.floor(maxLines / 2);
+    const tailCount = Math.ceil(maxLines / 2);
+    const middleStart = headCount;
+    const middleEnd = lines.length - tailCount;
+    const signals: string[] = [];
+    const SIGNAL_RE = /^(?:.*\b)?(ImportError:|ModuleNotFoundError:|NameError:|AttributeError:|SyntaxError:|TypeError:|AssertionError:|openai\.(?:OpenAI|Authentication|APIKey)Error|Cannot find module|MODULE_NOT_FOUND|panic:)/;
+    for (let i = middleStart; i < middleEnd && signals.length < 6; i++) {
+      const line = lines[i]!;
+      if (SIGNAL_RE.test(line)) signals.push(line.trim());
+    }
+    const omitMarker = signals.length > 0
+      ? `... [omitted ${lines.length - maxLines} lines; signal lines preserved below] ...\n  ${signals.join('\n  ')}\n... [end signal lines] ...`
+      : `... [omitted ${lines.length - maxLines} lines] ...`;
+    trimmed = [...lines.slice(0, headCount), omitMarker, ...lines.slice(-tailCount)].join('\n');
+  }
   if (trimmed.length > maxChars) {
     trimmed = trimmed.slice(0, maxChars) + `... [truncated, original ${redacted.length} chars]`;
   }

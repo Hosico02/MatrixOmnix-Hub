@@ -1,6 +1,6 @@
 {
   "version": "1",
-  "updated_at": "2026-05-15T05:55:47.300Z",
+  "updated_at": "2026-05-16T13:00:19.482Z",
   "assertions": [
     "missing_validation_after_code_change",
     "supervisor_accepts_unverified_result",
@@ -142,13 +142,13 @@
       "title": "Command \"python3 -m\" failed 2 times in one iteration without root-cause analysis",
       "category": "repeated_failure",
       "severity": "high",
-      "frequency": 264,
+      "frequency": 306,
       "status": "active",
       "project_type": [
         "generic"
       ],
       "bug_source": {
-        "iteration_id": "iter_mp6hihclen8q5g",
+        "iteration_id": "iter_mp8cpq3bqdqusj",
         "agent": "verifier",
         "source": "iteration_event",
         "related_files": []
@@ -196,8 +196,71 @@
       "suggested_test_type": "workflow_regression",
       "fingerprint": "repeated_failure_without_root_cause:python3 -m",
       "created_at": "2026-05-13T06:38:40.892Z",
-      "updated_at": "2026-05-15T05:36:23.309Z",
-      "last_seen_at": "2026-05-15T05:36:23.309Z",
+      "updated_at": "2026-05-16T13:00:19.479Z",
+      "last_seen_at": "2026-05-16T13:00:19.479Z",
+      "related_files": []
+    },
+    {
+      "id": "qa_mp8cas1tvtawi2",
+      "title": "Command \"node scripts/ui-product-check.mjs\" failed 2 times in one iteration without root-cause analysis",
+      "category": "repeated_failure",
+      "severity": "high",
+      "frequency": 9,
+      "status": "active",
+      "project_type": [
+        "generic"
+      ],
+      "bug_source": {
+        "iteration_id": "iter_mp8catqbl700p5",
+        "agent": "verifier",
+        "source": "iteration_event",
+        "related_files": []
+      },
+      "trigger_condition": "The same command failed repeatedly within a single iteration with no documented root cause.",
+      "human_flow": [
+        {
+          "step": 1,
+          "actor": "user",
+          "action": "requests a code-modifying change"
+        },
+        {
+          "step": 2,
+          "actor": "supervisor",
+          "action": "plans and assigns task"
+        },
+        {
+          "step": 3,
+          "actor": "executor",
+          "action": "applies the change"
+        },
+        {
+          "step": 4,
+          "actor": "executor",
+          "action": "must run at least one verification command"
+        },
+        {
+          "step": 5,
+          "actor": "supervisor",
+          "action": "checks evidence before marking task complete"
+        }
+      ],
+      "expected_behavior": "After two consecutive failures of the same command, the executor must summarize root cause before continuing.",
+      "actual_failure": "command \"node scripts/ui-product-check.mjs\" failed 2 times",
+      "regression_assertions": [
+        "if changed_files is non-empty then commands_run must be non-empty",
+        "if commands_run is empty then unable_to_verify_reason must be set",
+        "supervisor must not accept completed without verification_evidence"
+      ],
+      "reproduction_steps": [
+        "configure executor to return changed_files without commands_run",
+        "run a single iteration",
+        "inspect QA regression runner output"
+      ],
+      "suggested_test_type": "workflow_regression",
+      "fingerprint": "repeated_failure_without_root_cause:node scripts/ui-product-check.mjs",
+      "created_at": "2026-05-16T12:45:56.225Z",
+      "updated_at": "2026-05-16T12:51:26.057Z",
+      "last_seen_at": "2026-05-16T12:51:26.057Z",
       "related_files": []
     }
   ]

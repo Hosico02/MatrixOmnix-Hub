@@ -2218,4 +2218,589 @@ describe('gapAnalyzer', () => {
     expect(categories).toContain('missing_data_migration_harness');
     expect(categories).toContain('missing_worker_contract_harness');
   });
+
+  it('flags trivial 1+1 smoke tests and entrypoints that no test exercises', async () => {
+    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-behavioral-depth-'));
+    await fs.mkdir(path.join(dir, 'src'), { recursive: true });
+    await fs.mkdir(path.join(dir, 'tests'), { recursive: true });
+    await fs.writeFile(path.join(dir, 'README.md'), '# Demo\n\nA single-page app.\n' + 'x'.repeat(420));
+    await fs.writeFile(path.join(dir, 'package.json'), JSON.stringify({
+      name: 'shell-only-demo',
+      type: 'module',
+      scripts: { test: 'node --test tests/smoke.test.mjs', build: 'tsc -p tsconfig.json' },
+      dependencies: { vue: '^3.5.0' },
+    }, null, 2));
+    await fs.writeFile(path.join(dir, 'index.html'), '<!doctype html><div id="app"></div><script type="module" src="/src/App.vue"></script>');
+    await fs.writeFile(path.join(dir, 'src', 'App.vue'), '<template><main><h1>Demo</h1><p>visible content</p></main></template>\n');
+    // Trivial 1+1 smoke that never references App.vue or index.html.
+    await fs.writeFile(path.join(dir, 'tests', 'smoke.test.mjs'),
+      "import { test } from 'node:test';\nimport assert from 'node:assert';\ntest('sanity', () => { assert.equal(1 + 1, 2); });\n");
+
+    const { gap } = await new AnalyzerAgent().fullAnalyze(dir);
+    const categories = gap.findings.map((f) => f.category);
+    expect(categories).toContain('trivial_smoke_test_only');
+    expect(categories).toContain('demo_entrypoint_not_exercised_by_tests');
+    const entrypointFinding = gap.findings.find((f) => f.category === 'demo_entrypoint_not_exercised_by_tests');
+    expect(entrypointFinding?.severity).toBe('blocker');
+    expect(entrypointFinding?.related_files).toEqual(expect.arrayContaining(['index.html', 'src/App.vue']));
+  });
+
+  it('treats scaffolded product-core tests as not exercising the demo entrypoint', async () => {
+    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-product-core-scaffold-'));
+    await fs.mkdir(path.join(dir, 'src'), { recursive: true });
+    await fs.mkdir(path.join(dir, 'tests'), { recursive: true });
+    await fs.writeFile(path.join(dir, 'README.md'), '# Demo\n\nA single-page app.\n' + 'x'.repeat(420));
+    await fs.writeFile(path.join(dir, 'package.json'), JSON.stringify({
+      name: 'scaffold-only-demo',
+      type: 'module',
+      scripts: { test: 'node --test tests/product-core.test.mjs', build: 'tsc' },
+      dependencies: { vue: '^3.5.0' },
+    }, null, 2));
+    await fs.writeFile(path.join(dir, 'index.html'), '<!doctype html><div id="app"></div>');
+    await fs.writeFile(path.join(dir, 'src', 'App.vue'), '<template><main><h1>Demo</h1></main></template>\n');
+    await fs.writeFile(path.join(dir, 'src', 'product-core.mjs'),
+      'export function createProductCore() { return { capabilities: ["web_ui"], workflows: [] }; }\nexport function validateProductCore(core) { return { ok: !!core }; }\nexport function runWorkflow(id) { return { ok: id === "status" }; }\n');
+    await fs.writeFile(path.join(dir, 'tests', 'product-core.test.mjs'),
+      'import test from "node:test";\nimport assert from "node:assert/strict";\nimport { createProductCore } from "../src/product-core.mjs";\ntest("product core", () => { assert.equal(createProductCore().capabilities[0], "web_ui"); });\n');
+
+    const { gap } = await new AnalyzerAgent().fullAnalyze(dir);
+    const categories = gap.findings.map((f) => f.category);
+    expect(categories).toContain('trivial_smoke_test_only');
+    expect(categories).toContain('demo_entrypoint_not_exercised_by_tests');
+  });
+
+  it('flags raw-SQL CRUD demos without a runtime round-trip test', async () => {
+    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-db-crud-gap-'));
+    await fs.mkdir(path.join(dir, 'tests'), { recursive: true });
+    await fs.writeFile(path.join(dir, 'README.md'), '# CRUD Demo\n\n' + 'x'.repeat(420));
+    await fs.writeFile(path.join(dir, 'requirements.txt'), 'flask\n');
+    await fs.writeFile(path.join(dir, 'app.py'), [
+      'import sqlite3',
+      'from flask import Flask, jsonify, request',
+      'app = Flask(__name__)',
+      'with sqlite3.connect("data.db") as c:',
+      '    c.execute("CREATE TABLE IF NOT EXISTS notes (id INTEGER PRIMARY KEY, title TEXT)")',
+      '@app.post("/notes")',
+      'def create():',
+      '    sqlite3.connect("data.db").execute("INSERT INTO notes(title) VALUES (?)", ("x",))',
+      '    return jsonify({"ok": True})',
+      '',
+    ].join('\n'));
+    // A test exists but only checks status code; no INSERT/SELECT/DELETE round trip.
+    await fs.writeFile(path.join(dir, 'tests', 'test_app.py'), [
+      'def test_post(client_factory):',
+      '    assert True',
+      '',
+    ].join('\n'));
+
+    const { gap } = await new AnalyzerAgent().fullAnalyze(dir);
+    const categories = gap.findings.map((f) => f.category);
+    expect(categories).toContain('missing_db_crud_runtime_tests');
+    const finding = gap.findings.find((f) => f.category === 'missing_db_crud_runtime_tests');
+    expect(finding?.severity).toBe('blocker');
+  });
+
+  it('flags worker demos that have no test enqueueing+draining the worker entry function', async () => {
+    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-worker-runtime-gap-'));
+    await fs.mkdir(path.join(dir, 'tests'), { recursive: true });
+    await fs.writeFile(path.join(dir, 'README.md'), '# Worker Demo\n\n' + 'x'.repeat(420));
+    await fs.writeFile(path.join(dir, 'requirements.txt'), 'pytest>=8\n');
+    await fs.writeFile(path.join(dir, 'worker.py'), [
+      'import os',
+      'QUEUE_PATH = os.environ.get("QUEUE_PATH", "q.jsonl")',
+      'def drain_once():',
+      '    return 0',
+      '',
+    ].join('\n'));
+    await fs.writeFile(path.join(dir, 'tests', 'test_smoke.py'), 'def test_a(): assert True\n');
+
+    const { gap } = await new AnalyzerAgent().fullAnalyze(dir);
+    const categories = gap.findings.map((f) => f.category);
+    expect(categories).toContain('missing_worker_runtime_enqueue_test');
+    expect(gap.findings.find((f) => f.category === 'missing_worker_runtime_enqueue_test')?.severity).toBe('high');
+  });
+
+  it('clears the worker runtime gap once a test imports the worker and calls drain_once', async () => {
+    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-worker-runtime-clear-'));
+    await fs.mkdir(path.join(dir, 'tests'), { recursive: true });
+    await fs.writeFile(path.join(dir, 'README.md'), '# Worker Demo\n\n' + 'x'.repeat(420));
+    await fs.writeFile(path.join(dir, 'requirements.txt'), 'pytest>=8\n');
+    await fs.writeFile(path.join(dir, 'worker.py'), 'def drain_once():\n    return 0\n');
+    await fs.writeFile(path.join(dir, 'tests', 'test_worker.py'), [
+      'def test_drain():',
+      '    import worker',
+      '    assert worker.drain_once() == 0',
+      '',
+    ].join('\n'));
+
+    const { gap } = await new AnalyzerAgent().fullAnalyze(dir);
+    expect(gap.findings.map((f) => f.category)).not.toContain('missing_worker_runtime_enqueue_test');
+  });
+
+  it('flags projects that read env vars but have no test setting env before importing the config module', async () => {
+    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-config-runtime-gap-'));
+    await fs.mkdir(path.join(dir, 'tests'), { recursive: true });
+    await fs.writeFile(path.join(dir, 'README.md'), '# Config Demo\n\n' + 'x'.repeat(420));
+    await fs.writeFile(path.join(dir, 'requirements.txt'), 'pytest>=8\n');
+    await fs.writeFile(path.join(dir, 'app.py'), [
+      'import os',
+      'SECRET_KEY = os.environ.get("SECRET_KEY", "")',
+      'DATABASE_URL = os.environ["DATABASE_URL"]',
+      '',
+    ].join('\n'));
+    await fs.writeFile(path.join(dir, 'tests', 'test_smoke.py'), 'def test_a(): assert True\n');
+
+    const { gap } = await new AnalyzerAgent().fullAnalyze(dir);
+    const categories = gap.findings.map((f) => f.category);
+    expect(categories).toContain('missing_config_runtime_load_test');
+    expect(gap.findings.find((f) => f.category === 'missing_config_runtime_load_test')?.severity).toBe('high');
+  });
+
+  it('clears the config runtime gap once a test sets env vars before importing the module', async () => {
+    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-config-runtime-clear-'));
+    await fs.mkdir(path.join(dir, 'tests'), { recursive: true });
+    await fs.writeFile(path.join(dir, 'README.md'), '# Config Demo\n\n' + 'x'.repeat(420));
+    await fs.writeFile(path.join(dir, 'requirements.txt'), 'pytest>=8\n');
+    await fs.writeFile(path.join(dir, 'app.py'), 'import os\nSECRET_KEY = os.environ.get("SECRET_KEY", "")\n');
+    await fs.writeFile(path.join(dir, 'tests', 'test_config.py'), [
+      'def test_loads(monkeypatch):',
+      '    monkeypatch.setenv("SECRET_KEY", "dummy")',
+      '    import app',
+      '    assert app.SECRET_KEY == "dummy"',
+      '',
+    ].join('\n'));
+
+    const { gap } = await new AnalyzerAgent().fullAnalyze(dir);
+    expect(gap.findings.map((f) => f.category)).not.toContain('missing_config_runtime_load_test');
+  });
+
+  it('flags API demos that have no test invoking any route through a test client', async () => {
+    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-api-runtime-gap-'));
+    await fs.mkdir(path.join(dir, 'tests'), { recursive: true });
+    await fs.writeFile(path.join(dir, 'README.md'), '# API Demo\n\n' + 'x'.repeat(420));
+    await fs.writeFile(path.join(dir, 'requirements.txt'), 'flask\n');
+    await fs.writeFile(path.join(dir, 'app.py'), [
+      'from flask import Flask, jsonify, request',
+      'app = Flask(__name__)',
+      '@app.post("/summarize")',
+      'def summarize():',
+      '    text = (request.get_json(silent=True) or {}).get("text", "")',
+      '    return jsonify({"summary": text[:20]})',
+      '',
+    ].join('\n'));
+    await fs.writeFile(path.join(dir, 'tests', 'test_smoke.py'), [
+      'def test_imports_ok():',
+      '    import app',
+      '    assert app.app is not None',
+      '',
+    ].join('\n'));
+
+    const { gap } = await new AnalyzerAgent().fullAnalyze(dir);
+    const categories = gap.findings.map((f) => f.category);
+    expect(categories).toContain('missing_api_runtime_behaviour_test');
+    expect(gap.findings.find((f) => f.category === 'missing_api_runtime_behaviour_test')?.severity).toBe('blocker');
+  });
+
+  it('clears the API runtime behaviour gap once a test invokes a route via test_client', async () => {
+    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-api-runtime-clear-'));
+    await fs.mkdir(path.join(dir, 'tests'), { recursive: true });
+    await fs.writeFile(path.join(dir, 'README.md'), '# API Demo\n\n' + 'x'.repeat(420));
+    await fs.writeFile(path.join(dir, 'requirements.txt'), 'flask\n');
+    await fs.writeFile(path.join(dir, 'app.py'), [
+      'from flask import Flask, jsonify',
+      'app = Flask(__name__)',
+      '@app.get("/health")',
+      'def health(): return jsonify({"ok": True})',
+      '',
+    ].join('\n'));
+    await fs.writeFile(path.join(dir, 'tests', 'test_api.py'), [
+      'def test_health():',
+      '    import app',
+      '    client = app.app.test_client()',
+      '    response = client.get("/health")',
+      '    assert response.status_code == 200',
+      '',
+    ].join('\n'));
+
+    const { gap } = await new AnalyzerAgent().fullAnalyze(dir);
+    const categories = gap.findings.map((f) => f.category);
+    expect(categories).not.toContain('missing_api_runtime_behaviour_test');
+  });
+
+  it('flags multi-service repos without a cross-service integration check', async () => {
+    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-multi-service-gap-'));
+    await fs.mkdir(path.join(dir, 'api'), { recursive: true });
+    await fs.mkdir(path.join(dir, 'worker'), { recursive: true });
+    await fs.mkdir(path.join(dir, 'web'), { recursive: true });
+    await fs.writeFile(path.join(dir, 'README.md'), '# Multi-service demo\n\n' + 'x'.repeat(420));
+    await fs.writeFile(path.join(dir, 'api', 'app.py'), 'from flask import Flask\napp = Flask(__name__)\n@app.post("/jobs")\ndef j(): return {}\n');
+    await fs.writeFile(path.join(dir, 'worker', 'worker.py'), 'def drain_once():\n    return 0\n');
+    await fs.writeFile(path.join(dir, 'web', 'index.html'), '<!doctype html><div id="app">Demo</div>');
+
+    const { gap } = await new AnalyzerAgent().fullAnalyze(dir);
+    const categories = gap.findings.map((f) => f.category);
+    expect(categories).toContain('missing_multi_service_integration_check');
+    expect(gap.findings.find((f) => f.category === 'missing_multi_service_integration_check')?.severity).toBe('blocker');
+  });
+
+  it('accepts smoke tests that read the demo entrypoint file content', async () => {
+    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-entrypoint-aware-smoke-'));
+    await fs.mkdir(path.join(dir, 'src'), { recursive: true });
+    await fs.mkdir(path.join(dir, 'tests'), { recursive: true });
+    await fs.writeFile(path.join(dir, 'README.md'), '# Demo\n\nA single-page app.\n' + 'x'.repeat(420));
+    await fs.writeFile(path.join(dir, 'package.json'), JSON.stringify({
+      name: 'entrypoint-aware-demo',
+      type: 'module',
+      scripts: { test: 'node --test tests/smoke.test.mjs', build: 'tsc' },
+      dependencies: { vue: '^3.5.0' },
+    }, null, 2));
+    await fs.writeFile(path.join(dir, 'index.html'), '<!doctype html><div id="app"></div><script type="module" src="/src/App.vue"></script>');
+    await fs.writeFile(path.join(dir, 'src', 'App.vue'), '<template><main><h1>Demo</h1></main></template>\n');
+    await fs.writeFile(path.join(dir, 'tests', 'smoke.test.mjs', ),
+      [
+        "import { test } from 'node:test';",
+        "import assert from 'node:assert/strict';",
+        "import fs from 'node:fs';",
+        "import path from 'node:path';",
+        "import { fileURLToPath } from 'node:url';",
+        "const here = path.dirname(fileURLToPath(import.meta.url));",
+        "const root = path.resolve(here, '..');",
+        "test('App.vue is a real component', () => {",
+        "  const src = fs.readFileSync(path.join(root, 'src/App.vue'), 'utf8');",
+        "  assert.match(src, /<template/);",
+        "});",
+        '',
+      ].join('\n'));
+
+    const { gap } = await new AnalyzerAgent().fullAnalyze(dir);
+    const categories = gap.findings.map((f) => f.category);
+    expect(categories).not.toContain('trivial_smoke_test_only');
+    expect(categories).not.toContain('demo_entrypoint_not_exercised_by_tests');
+  });
+
+  // --- Specialized surface runtime gates ---------------------------------
+
+  it('flags ML demos without a test that loads or runs the model artifact', async () => {
+    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-ml-runtime-gap-'));
+    await fs.writeFile(path.join(dir, 'README.md'), '# ML Demo\n\n' + 'x'.repeat(420));
+    await fs.writeFile(path.join(dir, 'package.json'), JSON.stringify({ name: 'ml-stub', type: 'module', dependencies: { 'onnxruntime-web': '^1.23.0' } }));
+    await fs.writeFile(path.join(dir, 'model.onnx'), Buffer.from('\x08\x07placeholder content'));
+    await fs.writeFile(path.join(dir, 'inference.js'), 'await import("onnxruntime-web");\n');
+    const { gap } = await new AnalyzerAgent().fullAnalyze(dir);
+    expect(gap.findings.map((f) => f.category)).toContain('missing_ml_model_runtime_inference_test');
+  });
+
+  it('clears the ML runtime gap once a test references onnxruntime / InferenceSession', async () => {
+    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-ml-runtime-clear-'));
+    await fs.mkdir(path.join(dir, 'tests'), { recursive: true });
+    await fs.writeFile(path.join(dir, 'README.md'), '# ML Demo\n\n' + 'x'.repeat(420));
+    await fs.writeFile(path.join(dir, 'package.json'), JSON.stringify({ name: 'ml-stub', type: 'module', dependencies: { 'onnxruntime-web': '^1.23.0' } }));
+    await fs.writeFile(path.join(dir, 'model.onnx'), Buffer.from('\x08\x07placeholder content'));
+    await fs.writeFile(path.join(dir, 'inference.js'), 'await import("onnxruntime-web");\n');
+    await fs.writeFile(path.join(dir, 'tests', 'ml-runtime.test.mjs'),
+      "import test from 'node:test';\ntest('ml', async () => { await import('onnxruntime-node'); });\n");
+    const { gap } = await new AnalyzerAgent().fullAnalyze(dir);
+    expect(gap.findings.map((f) => f.category)).not.toContain('missing_ml_model_runtime_inference_test');
+  });
+
+  it('flags game demos without a test referencing Phaser or pygame', async () => {
+    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-game-runtime-gap-'));
+    await fs.writeFile(path.join(dir, 'README.md'), '# Game Demo\n\n' + 'x'.repeat(420));
+    await fs.writeFile(path.join(dir, 'package.json'), JSON.stringify({ name: 'game-stub', type: 'module', dependencies: { phaser: '^3.90.0' } }));
+    await fs.mkdir(path.join(dir, 'src'), { recursive: true });
+    await fs.writeFile(path.join(dir, 'src', 'index.js'), 'import Phaser from "phaser";\nnew Phaser.Game({ type: Phaser.AUTO });\n');
+    const { gap } = await new AnalyzerAgent().fullAnalyze(dir);
+    expect(gap.findings.map((f) => f.category)).toContain('missing_game_runtime_loop_test');
+  });
+
+  it('flags 3D demos without a test using THREE / WebGL', async () => {
+    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-3d-runtime-gap-'));
+    await fs.writeFile(path.join(dir, 'README.md'), '# 3D Demo\n\n' + 'x'.repeat(420));
+    await fs.writeFile(path.join(dir, 'package.json'), JSON.stringify({ name: '3d-stub', type: 'module', dependencies: { three: '^0.170.0' } }));
+    await fs.mkdir(path.join(dir, 'src'), { recursive: true });
+    await fs.writeFile(path.join(dir, 'src', 'scene.js'), 'import * as THREE from "three";\nconst scene = new THREE.Scene();\n');
+    const { gap } = await new AnalyzerAgent().fullAnalyze(dir);
+    expect(gap.findings.map((f) => f.category)).toContain('missing_3d_scene_runtime_render_test');
+  });
+
+  it('flags browser extension demos without a manifest validation test', async () => {
+    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-ext-runtime-gap-'));
+    await fs.writeFile(path.join(dir, 'README.md'), '# Extension Demo\n\n' + 'x'.repeat(420));
+    await fs.writeFile(path.join(dir, 'manifest.json'), JSON.stringify({ manifest_version: 3, name: 'stub', version: '0.1.0' }));
+    await fs.writeFile(path.join(dir, 'background.js'), 'chrome.runtime.onMessage.addListener(() => {});\n');
+    const { gap } = await new AnalyzerAgent().fullAnalyze(dir);
+    expect(gap.findings.map((f) => f.category)).toContain('missing_browser_extension_runtime_manifest_test');
+  });
+
+  it('flags mobile demos without a bundle / app.json runtime test', async () => {
+    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-mobile-runtime-gap-'));
+    await fs.writeFile(path.join(dir, 'README.md'), '# Mobile Demo\n\n' + 'x'.repeat(420));
+    await fs.writeFile(path.join(dir, 'app.json'), JSON.stringify({ expo: { name: 'X', slug: 'x' } }));
+    await fs.writeFile(path.join(dir, 'package.json'), JSON.stringify({ name: 'mobile-stub', dependencies: { expo: '^54.0.0', 'react-native': '^0.81.0' } }));
+    const { gap } = await new AnalyzerAgent().fullAnalyze(dir);
+    expect(gap.findings.map((f) => f.category)).toContain('missing_mobile_runtime_bundle_test');
+  });
+
+  it('flags desktop demos without an electron / tauri runtime test', async () => {
+    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-desktop-runtime-gap-'));
+    await fs.writeFile(path.join(dir, 'README.md'), '# Desktop Demo\n\n' + 'x'.repeat(420));
+    await fs.writeFile(path.join(dir, 'package.json'), JSON.stringify({ name: 'desktop-stub', dependencies: { electron: '^33.0.0' } }));
+    await fs.writeFile(path.join(dir, 'electron.js'), 'import { app, BrowserWindow } from "electron";\napp.whenReady().then(() => new BrowserWindow({}));\n');
+    const { gap } = await new AnalyzerAgent().fullAnalyze(dir);
+    expect(gap.findings.map((f) => f.category)).toContain('missing_desktop_runtime_boot_test');
+  });
+
+  // --- LLM chat-style productization gates -------------------------------
+  // These four detectors gate the LLM chat suite. Each one has a missing-case
+  // (gate fires) and a satisfied-case (gate clears) so the implementation
+  // contract is locked down and false positives on non-chat LLM demos remain
+  // suppressed.
+
+  async function scaffoldLlmChatDemo(dir: string): Promise<void> {
+    await fs.writeFile(path.join(dir, 'README.md'), '# LLM Chat Demo\n\n' + 'x'.repeat(420));
+    await fs.writeFile(
+      path.join(dir, 'requirements.txt'),
+      'flask>=3.0\nopenai>=1.0\npytest>=8.0\n',
+    );
+    await fs.writeFile(
+      path.join(dir, 'app.py'),
+      [
+        'import os',
+        'from flask import Flask, jsonify, request',
+        'from openai import OpenAI',
+        '',
+        'app = Flask(__name__)',
+        'client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))',
+        '',
+        '@app.post("/chat")',
+        'def chat():',
+        '    body = request.get_json(silent=True) or {}',
+        '    message = body.get("message", "")',
+        '    response = client.chat.completions.create(',
+        '        model="gpt-4o-mini",',
+        '        messages=[{"role": "user", "content": message}],',
+        '    )',
+        '    return jsonify({"reply": response.choices[0].message.content})',
+        '',
+      ].join('\n'),
+    );
+  }
+
+  it('flags LLM chat demos without a prompt eval harness', async () => {
+    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-llm-eval-gap-'));
+    await scaffoldLlmChatDemo(dir);
+    const { gap } = await new AnalyzerAgent().fullAnalyze(dir);
+    expect(gap.findings.map((f) => f.category)).toContain('missing_llm_prompt_eval_harness');
+  });
+
+  it('clears the prompt-eval gate once tests/prompts fixtures + iterating harness exist', async () => {
+    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-llm-eval-clear-'));
+    await scaffoldLlmChatDemo(dir);
+    await fs.mkdir(path.join(dir, 'tests', 'prompts'), { recursive: true });
+    await fs.writeFile(
+      path.join(dir, 'tests', 'prompts', 'intro.json'),
+      JSON.stringify({ input: 'hi', expected_keys: ['reply'] }),
+    );
+    await fs.writeFile(
+      path.join(dir, 'tests', 'test_prompt_eval.py'),
+      [
+        'import json, pathlib',
+        'def test_prompts_iterate():',
+        '    cases = list(pathlib.Path("tests/prompts").glob("*.json"))',
+        '    for c in cases:',
+        '        data = json.loads(c.read_text())',
+        '        assert "input" in data',
+        '',
+      ].join('\n'),
+    );
+    const { gap } = await new AnalyzerAgent().fullAnalyze(dir);
+    expect(gap.findings.map((f) => f.category)).not.toContain('missing_llm_prompt_eval_harness');
+  });
+
+  it('flags LLM chat demos without a provider-failure fallback test', async () => {
+    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-llm-fallback-gap-'));
+    await scaffoldLlmChatDemo(dir);
+    const { gap } = await new AnalyzerAgent().fullAnalyze(dir);
+    expect(gap.findings.map((f) => f.category)).toContain('missing_llm_provider_failure_fallback');
+  });
+
+  it('clears the provider-fallback gate when a test patches the client to raise and asserts a graceful 5xx', async () => {
+    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-llm-fallback-clear-'));
+    await scaffoldLlmChatDemo(dir);
+    await fs.mkdir(path.join(dir, 'tests'), { recursive: true });
+    await fs.writeFile(
+      path.join(dir, 'tests', 'test_provider_fallback.py'),
+      [
+        'from unittest.mock import patch, Mock',
+        'from app import app',
+        '',
+        'def test_provider_failure_returns_graceful_status():',
+        '    fake = Mock()',
+        '    fake.chat.completions.create = Mock(side_effect=RuntimeError("provider down"))',
+        '    with patch("app.OpenAI", return_value=fake):',
+        '        client = app.test_client()',
+        '        r = client.post("/chat", json={"message": "x"})',
+        '        assert r.status_code in (502, 503, 504, 429)',
+        '',
+      ].join('\n'),
+    );
+    const { gap } = await new AnalyzerAgent().fullAnalyze(dir);
+    expect(gap.findings.map((f) => f.category)).not.toContain('missing_llm_provider_failure_fallback');
+  });
+
+  it('flags LLM chat demos without a token / input-size budget enforcement', async () => {
+    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-llm-token-gap-'));
+    await scaffoldLlmChatDemo(dir);
+    const { gap } = await new AnalyzerAgent().fullAnalyze(dir);
+    expect(gap.findings.map((f) => f.category)).toContain('missing_llm_token_budget_enforcement');
+  });
+
+  it('clears the token-budget gate when source declares MAX_MESSAGE_LENGTH or the test sends oversized input and asserts 4xx', async () => {
+    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-llm-token-clear-'));
+    await scaffoldLlmChatDemo(dir);
+    await fs.mkdir(path.join(dir, 'tests'), { recursive: true });
+    await fs.writeFile(
+      path.join(dir, 'tests', 'test_token_budget.py'),
+      [
+        'from app import app',
+        '',
+        'def test_oversized_message_is_rejected():',
+        '    client = app.test_client()',
+        '    huge = "x" * 50000',
+        '    r = client.post("/chat", json={"message": huge})',
+        '    assert r.status_code in (400, 413, 422)',
+        '',
+      ].join('\n'),
+    );
+    const { gap } = await new AnalyzerAgent().fullAnalyze(dir);
+    expect(gap.findings.map((f) => f.category)).not.toContain('missing_llm_token_budget_enforcement');
+  });
+
+  it('flags LLM chat demos without a prompt template registry', async () => {
+    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-llm-registry-gap-'));
+    await scaffoldLlmChatDemo(dir);
+    const { gap } = await new AnalyzerAgent().fullAnalyze(dir);
+    expect(gap.findings.map((f) => f.category)).toContain('missing_llm_prompt_template_registry');
+  });
+
+  it('clears the template-registry gate when prompts.py registry exists and source loads from it', async () => {
+    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-llm-registry-clear-'));
+    await scaffoldLlmChatDemo(dir);
+    await fs.mkdir(path.join(dir, 'prompts'), { recursive: true });
+    await fs.writeFile(path.join(dir, 'prompts', 'chat_system.txt'), 'You are a helpful assistant.\n');
+    await fs.writeFile(
+      path.join(dir, 'prompts.py'),
+      'from pathlib import Path\nPROMPT_TEMPLATES = {p.stem: p.read_text() for p in Path("prompts").glob("*.txt")}\n'
+      + 'def load_prompt(name): return PROMPT_TEMPLATES[name]\n',
+    );
+    // Source must reference the registry by name.
+    await fs.writeFile(
+      path.join(dir, 'app.py'),
+      (await fs.readFile(path.join(dir, 'app.py'), 'utf8'))
+        .replace('from openai import OpenAI', 'from openai import OpenAI\nfrom prompts import load_prompt'),
+    );
+    const { gap } = await new AnalyzerAgent().fullAnalyze(dir);
+    expect(gap.findings.map((f) => f.category)).not.toContain('missing_llm_prompt_template_registry');
+  });
+
+  it('flags LLM chat demos without a streaming response surface', async () => {
+    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-llm-stream-gap-'));
+    await scaffoldLlmChatDemo(dir);
+    const { gap } = await new AnalyzerAgent().fullAnalyze(dir);
+    expect(gap.findings.map((f) => f.category)).toContain('missing_llm_streaming_response');
+  });
+
+  it('clears the streaming gate when a streaming.py module declares SSE + stream=True LLM call', async () => {
+    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-llm-stream-clear-'));
+    await scaffoldLlmChatDemo(dir);
+    await fs.writeFile(
+      path.join(dir, 'streaming.py'),
+      [
+        'from flask import Response',
+        'def chat_stream(client, message):',
+        '    stream = client.chat.completions.create(model="gpt-4o-mini",',
+        '        messages=[{"role": "user", "content": message}], stream=True)',
+        '    def gen():',
+        '        for chunk in stream: yield f"data: {chunk}\\n\\n"',
+        '    return Response(gen(), mimetype="text/event-stream")',
+        '',
+      ].join('\n'),
+    );
+    const { gap } = await new AnalyzerAgent().fullAnalyze(dir);
+    expect(gap.findings.map((f) => f.category)).not.toContain('missing_llm_streaming_response');
+  });
+
+  it('flags Flask API demos without a structured error envelope', async () => {
+    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-api-envelope-gap-'));
+    await fs.writeFile(path.join(dir, 'README.md'), '# Api Demo\n\n' + 'x'.repeat(420));
+    await fs.writeFile(path.join(dir, 'requirements.txt'), 'flask>=3.0\npytest>=8.0\n');
+    await fs.writeFile(
+      path.join(dir, 'app.py'),
+      [
+        'from flask import Flask, jsonify',
+        'app = Flask(__name__)',
+        '@app.get("/health")',
+        'def health(): return jsonify({"ok": True})',
+        '',
+      ].join('\n'),
+    );
+    const { gap } = await new AnalyzerAgent().fullAnalyze(dir);
+    expect(gap.findings.map((f) => f.category)).toContain('missing_api_error_envelope');
+  });
+
+  it('clears the error-envelope gate when @app.errorhandler is registered', async () => {
+    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-api-envelope-clear-'));
+    await fs.writeFile(path.join(dir, 'README.md'), '# Api Demo\n\n' + 'x'.repeat(420));
+    await fs.writeFile(path.join(dir, 'requirements.txt'), 'flask>=3.0\npytest>=8.0\n');
+    await fs.writeFile(
+      path.join(dir, 'app.py'),
+      [
+        'from flask import Flask, jsonify',
+        'app = Flask(__name__)',
+        '@app.get("/health")',
+        'def health(): return jsonify({"ok": True})',
+        '@app.errorhandler(Exception)',
+        'def err(exc): return jsonify({"error": type(exc).__name__, "message": str(exc), "status": 500}), 500',
+        '',
+      ].join('\n'),
+    );
+    const { gap } = await new AnalyzerAgent().fullAnalyze(dir);
+    expect(gap.findings.map((f) => f.category)).not.toContain('missing_api_error_envelope');
+  });
+
+  it('suppresses LLM chat-style findings for an LLM-backed simulation server that has no chat route', async () => {
+    // Servers that use the LLM as an internal agent (e.g. background game loops)
+    // legitimately have no /chat-style HTTP surface. The four chat gates should
+    // not fire — the relevant gates for these servers are background-task /
+    // observability ones, not prompt-eval harnesses.
+    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-llm-sim-no-chat-'));
+    await fs.writeFile(path.join(dir, 'README.md'), '# Sim Server\n\n' + 'x'.repeat(420));
+    await fs.writeFile(path.join(dir, 'requirements.txt'), 'flask>=3.0\nopenai>=1.0\npytest>=8.0\n');
+    await fs.writeFile(
+      path.join(dir, 'app.py'),
+      [
+        'import os, threading',
+        'from flask import Flask, jsonify',
+        'from openai import OpenAI',
+        '',
+        'app = Flask(__name__)',
+        'client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))',
+        '',
+        '@app.post("/start")',
+        'def start():',
+        '    def loop():',
+        '        client.chat.completions.create(model="gpt-4o-mini", messages=[])',
+        '    threading.Thread(target=loop, daemon=True).start()',
+        '    return jsonify({"started": True})',
+        '',
+      ].join('\n'),
+    );
+    const { gap } = await new AnalyzerAgent().fullAnalyze(dir);
+    const cats = gap.findings.map((f) => f.category);
+    expect(cats).not.toContain('missing_llm_prompt_eval_harness');
+    expect(cats).not.toContain('missing_llm_provider_failure_fallback');
+    expect(cats).not.toContain('missing_llm_token_budget_enforcement');
+    expect(cats).not.toContain('missing_llm_prompt_template_registry');
+    expect(cats).not.toContain('missing_llm_streaming_response');
+  });
 });

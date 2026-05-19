@@ -360,22 +360,25 @@ input:focus-visible,
   letter-spacing: 0;
 }
 
-.image-grid,
 .about-narrative,
 .text-grid,
 .service-layout,
 .contact-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 22px;
   margin-top: 48px;
 }
 
-.text-grid,
-.about-narrative,
-.service-layout,
-.contact-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+/* Image grid is now single-column, full-width per figure so dense diagrams
+   keep their text legible. Each image renders at its own aspect ratio. */
+.image-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 56px;
+  margin: 56px auto 0;
+  max-width: 1120px;
+  width: 100%;
 }
 
 .image-grid figure,
@@ -393,20 +396,35 @@ input:focus-visible,
 .image-grid figure {
   margin: 0;
   display: grid;
-  gap: 12px;
-  padding: 16px;
+  gap: 16px;
+  padding: 24px;
 }
 
 .image-grid img {
   width: 100%;
-  aspect-ratio: 4 / 3;
-  object-fit: cover;
+  height: auto;
+  display: block;
+  aspect-ratio: auto;
+  object-fit: contain;
+  background: #fff;
   border: 1px solid var(--line);
 }
 
 .image-grid figcaption {
-  font-size: 0.92rem;
+  font-size: 0.96rem;
   color: var(--muted);
+  text-align: center;
+  margin-top: 4px;
+}
+
+@media (max-width: 720px) {
+  .image-grid {
+    gap: 40px;
+    margin-top: 40px;
+  }
+  .image-grid figure {
+    padding: 16px;
+  }
 }
 
 .text-grid article,
@@ -566,5 +584,108 @@ input:focus-visible,
   .content-page {
     width: min(100% - 32px, 1180px);
     padding: 56px 0;
+  }
+}
+
+/* ─── Sibling project card (links to Hosico02/d2p) ─────────────────────────── */
+.sibling-card {
+  width: 100vw;
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+  padding: 72px 0 88px;
+  display: flex;
+  justify-content: center;
+}
+
+.sibling-card__body {
+  width: min(100% - 64px, 980px);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.sibling-card__kicker {
+  font-size: 0.78rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.sibling-card__title {
+  font-size: clamp(1.35rem, 2.4vw, 1.9rem);
+  font-weight: 600;
+  line-height: 1.25;
+  margin: 0;
+  color: #111;
+}
+
+.sibling-card__title a {
+  color: #111;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+}
+
+.sibling-card__title a:hover {
+  text-decoration-thickness: 2px;
+}
+
+.sibling-card__copy {
+  margin: 0;
+  max-width: 70ch;
+  line-height: 1.7;
+  color: var(--muted);
+  font-size: 1rem;
+}
+
+.sibling-card__bullets {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: var(--muted);
+  line-height: 1.7;
+  font-size: 0.96rem;
+}
+
+.sibling-card__bullets li + li {
+  margin-top: 4px;
+}
+
+.sibling-card__pair {
+  margin: 0;
+  max-width: 70ch;
+  line-height: 1.7;
+  color: var(--muted);
+  font-size: 0.96rem;
+  font-style: italic;
+}
+
+.sibling-card__cta {
+  align-self: flex-start;
+  margin-top: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border: 1px solid #111;
+  color: #111;
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 0.95rem;
+  background: #fff;
+  transition: transform 120ms ease;
+}
+
+.sibling-card__cta:hover {
+  transform: translateY(-1px);
+  background: #111;
+  color: #fff;
+}
+
+@media (max-width: 720px) {
+  .sibling-card {
+    padding: 56px 0 64px;
+  }
+  .sibling-card__body {
+    width: min(100% - 32px, 980px);
   }
 }

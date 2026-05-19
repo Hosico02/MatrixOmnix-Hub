@@ -42,7 +42,7 @@ record('matrixomnix-brand', /MatrixOmnix/.test(app) && /全域智能矩阵/.test
 record('nav-pages', /id: 'about'/.test(app) && /id: 'service'/.test(app) && /id: 'contact'/.test(app), 'Vue app defines About, Service and Contact pages');
 record('home-hero-panel-separation', /<template v-if="page === 'home'">[\s\S]*<section class="hero"[\s\S]*<\/section>\s*<section class="panel-grid"/.test(app), 'Home hero centers title separately from capability panels');
 record('home-only-cursor', /v-if="page === 'home'" class="cursor-capture"/.test(app) && /v-if="page === 'home'" class="cursor-core"/.test(app), 'Custom cursor renders only on Home');
-record('about-images', /framework-loop\.svg/.test(app) && /harness-map\.svg/.test(app) && /deployment-flow\.svg/.test(app), 'About page uses framework images');
+record('about-images', /framework-loop\.(svg|png|webp|jpg)/.test(app) && /harness-map\.(svg|png|webp|jpg)/.test(app) && /deployment-flow\.(svg|png|webp|jpg)/.test(app), 'About page uses framework images');
 record('github-url', /https:\/\/github\.com\/Hosico02\/demo2project/.test(app), 'open source URL is present');
 record('home-beta-copy', /currently in beta/.test(app), 'Home copy states MatrixOmnix is beta');
 record('service-usage-guide', /data-service-guide/.test(app) && /Beta workflow/.test(app) && /pnpm matrixomnix analyze --project/.test(app), 'Service page explains beta CLI usage');

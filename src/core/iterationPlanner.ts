@@ -410,9 +410,27 @@ function isProductContractOrSurfaceCategory(category: string): boolean {
     'single_file_demo_without_intake_harness',
     'missing_cli_contract_harness',
     'missing_api_contract_harness',
+    'missing_api_runtime_behaviour_test',
     'missing_config_contract_harness',
+    'missing_config_runtime_load_test',
     'missing_data_migration_harness',
+    'missing_db_crud_runtime_tests',
+    'missing_multi_service_integration_check',
     'missing_worker_contract_harness',
+    'missing_worker_runtime_enqueue_test',
+    'missing_notebook_runtime_execution_test',
+    'missing_media_pipeline_runtime_test',
+    'missing_ml_model_runtime_inference_test',
+    'missing_game_runtime_loop_test',
+    'missing_3d_scene_runtime_render_test',
+    'missing_browser_extension_runtime_manifest_test',
+    'missing_mobile_runtime_bundle_test',
+    'missing_desktop_runtime_boot_test',
+    'missing_llm_prompt_eval_harness',
+    'missing_llm_provider_failure_fallback',
+    'missing_llm_token_budget_enforcement',
+    'missing_llm_prompt_template_registry',
+    'missing_llm_streaming_response',
     'missing_demo_surface_contract_matrix',
     'missing_browser_extension_contract_harness',
     'missing_notebook_contract_harness',
@@ -616,6 +634,354 @@ function buildTaskForFinding(
         ],
         expected_changed_files: ['docs/data-contract.md', 'scripts/data-contract-check.mjs', 'package.json'],
         verification_commands: ['node scripts/data-contract-check.mjs'],
+        priority: f.severity,
+        status: 'pending',
+      };
+    case 'missing_ml_model_runtime_inference_test':
+      return {
+        id: shortId('task'),
+        iteration_id: iterationId,
+        assigned_to: 'executor',
+        title: 'Add ML model runtime inference test',
+        description: f.message,
+        acceptance_criteria: [
+          'tests/ml-runtime.test.mjs is created with a test that attempts to load the model artifact and run inference',
+          'the test uses dynamic import for onnxruntime-node / joblib / torch and gracefully skips when the library cannot be loaded',
+          'when the library loads, the test runs inference with synthetic input and asserts the output is non-empty',
+          'the test never depends on real training data or network downloads',
+        ],
+        expected_changed_files: ['tests/ml-runtime.test.mjs'],
+        verification_commands: ['node --test tests/ml-runtime.test.mjs'],
+        priority: f.severity,
+        status: 'pending',
+      };
+    case 'missing_game_runtime_loop_test':
+      return {
+        id: shortId('task'),
+        iteration_id: iterationId,
+        assigned_to: 'executor',
+        title: 'Add game runtime loop test',
+        description: f.message,
+        acceptance_criteria: [
+          'tests/game-runtime.test.mjs is created',
+          'the test attempts to instantiate the game engine in headless mode (Phaser headless renderer, pygame.init(), canvas + raf shim)',
+          'the test runs one update tick and asserts no exception is raised',
+          'the test gracefully skips when the engine cannot run in this environment',
+        ],
+        expected_changed_files: ['tests/game-runtime.test.mjs'],
+        verification_commands: ['node --test tests/game-runtime.test.mjs'],
+        priority: f.severity,
+        status: 'pending',
+      };
+    case 'missing_3d_scene_runtime_render_test':
+      return {
+        id: shortId('task'),
+        iteration_id: iterationId,
+        assigned_to: 'executor',
+        title: 'Add 3D scene runtime render test',
+        description: f.message,
+        acceptance_criteria: [
+          'tests/scene-runtime.test.mjs is created',
+          'the test constructs a minimal THREE.Scene + Camera + Mesh',
+          'the test attempts to create a WebGLRenderer / headless-gl context and run one render call',
+          'the test gracefully skips when WebGL cannot be created in this environment',
+        ],
+        expected_changed_files: ['tests/scene-runtime.test.mjs'],
+        verification_commands: ['node --test tests/scene-runtime.test.mjs'],
+        priority: f.severity,
+        status: 'pending',
+      };
+    case 'missing_browser_extension_runtime_manifest_test':
+      return {
+        id: shortId('task'),
+        iteration_id: iterationId,
+        assigned_to: 'executor',
+        title: 'Add browser extension runtime manifest test',
+        description: f.message,
+        acceptance_criteria: [
+          'tests/extension-runtime.test.mjs is created',
+          'the test reads manifest.json and validates required fields (manifest_version, name, version)',
+          'the test cross-checks that any referenced background.service_worker, content_scripts[].js, action.default_popup, options_ui.page actually exist on disk',
+          'optionally, the test launches Playwright chromium with --load-extension and skips gracefully when Playwright is unavailable',
+        ],
+        expected_changed_files: ['tests/extension-runtime.test.mjs'],
+        verification_commands: ['node --test tests/extension-runtime.test.mjs'],
+        priority: f.severity,
+        status: 'pending',
+      };
+    case 'missing_mobile_runtime_bundle_test':
+      return {
+        id: shortId('task'),
+        iteration_id: iterationId,
+        assigned_to: 'executor',
+        title: 'Add mobile runtime bundle test',
+        description: f.message,
+        acceptance_criteria: [
+          'tests/mobile-runtime.test.mjs is created',
+          'the test reads app.json and asserts it is a well-formed Expo manifest with expo.name and expo.slug',
+          'the test asserts a root component file (App.js / App.tsx / index.js) exists at the project root',
+          'optionally, the test spawns `npx expo export --dump-sourcemap` and asserts the bundle is produced; skips gracefully when Expo CLI is unavailable',
+        ],
+        expected_changed_files: ['tests/mobile-runtime.test.mjs'],
+        verification_commands: ['node --test tests/mobile-runtime.test.mjs'],
+        priority: f.severity,
+        status: 'pending',
+      };
+    case 'missing_desktop_runtime_boot_test':
+      return {
+        id: shortId('task'),
+        iteration_id: iterationId,
+        assigned_to: 'executor',
+        title: 'Add desktop runtime boot test',
+        description: f.message,
+        acceptance_criteria: [
+          'tests/desktop-runtime.test.mjs is created',
+          'the test attempts to import electron and spawn `electron --version` (or `cargo --version` for Tauri)',
+          'the test asserts a non-empty version string is returned',
+          'the test gracefully skips when the framework binary is not installed in this environment',
+        ],
+        expected_changed_files: ['tests/desktop-runtime.test.mjs'],
+        verification_commands: ['node --test tests/desktop-runtime.test.mjs'],
+        priority: f.severity,
+        status: 'pending',
+      };
+    case 'missing_media_pipeline_runtime_test':
+      return {
+        id: shortId('task'),
+        iteration_id: iterationId,
+        assigned_to: 'executor',
+        title: 'Add media pipeline runtime test',
+        description: f.message,
+        acceptance_criteria: [
+          'tests/media-runtime.test.mjs (Node) or tests/test_media_runtime.py (Python) is created',
+          'the test constructs a synthetic in-memory media input (sharp.create, raw RGB buffer, generated wav, etc.)',
+          'the test runs at least one transform from the project\'s media library (resize, encode, decode, filter)',
+          'the test asserts the output buffer or file is non-empty and has the expected media metadata (dimensions, format)',
+          'the test does not depend on real media assets shipped in the repo',
+        ],
+        expected_changed_files: ['tests/media-runtime.test.mjs', 'tests/test_media_runtime.py'],
+        verification_commands: ['node --test tests/media-runtime.test.mjs'],
+        priority: f.severity,
+        status: 'pending',
+      };
+    case 'missing_llm_prompt_eval_harness':
+      return {
+        id: shortId('task'),
+        iteration_id: iterationId,
+        assigned_to: 'executor',
+        title: 'Add LLM prompt evaluation harness',
+        description: f.message,
+        acceptance_criteria: [
+          'tests/prompts/ directory ships at least 2 golden cases as .json files (each with input message + expected reply shape)',
+          'tests/test_prompt_eval.py iterates every golden case under tests/prompts/',
+          'the harness monkeypatches the LLM client class so the test does not call the real provider',
+          'the harness asserts the response has the expected JSON shape and required keys (no network access required to pass)',
+        ],
+        expected_changed_files: ['tests/test_prompt_eval.py', 'tests/prompts/intro.json', 'tests/prompts/followup.json'],
+        verification_commands: ['python3 -m pytest tests/test_prompt_eval.py -q'],
+        priority: f.severity,
+        status: 'pending',
+      };
+    case 'missing_llm_provider_failure_fallback':
+      return {
+        id: shortId('task'),
+        iteration_id: iterationId,
+        assigned_to: 'executor',
+        title: 'Add LLM provider failure fallback test',
+        description: f.message,
+        acceptance_criteria: [
+          'tests/test_provider_fallback.py is created',
+          'the test monkeypatches the LLM client (app.OpenAI / app.Anthropic) so its create() raises an APIError / TimeoutError / generic Exception',
+          'the test drives the chat endpoint with a valid request',
+          'the test asserts the response status is in {502, 503, 429, 504} — not 500 and not 200 — with a structured error body',
+          'the test does not call the real provider',
+        ],
+        expected_changed_files: ['tests/test_provider_fallback.py', 'app.py'],
+        verification_commands: ['python3 -m pytest tests/test_provider_fallback.py -q'],
+        priority: f.severity,
+        status: 'pending',
+      };
+    case 'missing_llm_token_budget_enforcement':
+      return {
+        id: shortId('task'),
+        iteration_id: iterationId,
+        assigned_to: 'executor',
+        title: 'Add LLM token / input-size budget enforcement',
+        description: f.message,
+        acceptance_criteria: [
+          'either app.py declares a MAX_MESSAGE_LENGTH constant + a guard that returns 400/413 when input exceeds it, OR the chat handler is wrapped in a tiktoken-based token-counting check',
+          'tests/test_token_budget.py POSTs a message > 50 000 characters and asserts a 400/413/422 response',
+          'the same test confirms a normal-sized message still succeeds',
+          'no real provider call happens during the oversized-input test (the guard must fire before the provider is reached)',
+        ],
+        expected_changed_files: ['tests/test_token_budget.py', 'app.py'],
+        verification_commands: ['python3 -m pytest tests/test_token_budget.py -q'],
+        priority: f.severity,
+        status: 'pending',
+      };
+    case 'missing_api_error_envelope':
+      return {
+        id: shortId('task'),
+        iteration_id: iterationId,
+        assigned_to: 'executor',
+        title: 'Add structured API error envelope',
+        description: f.message,
+        acceptance_criteria: [
+          'app.py registers an @app.errorhandler(Exception) (or framework-equivalent) that returns a JSON envelope with at minimum {error, message, status}',
+          'a 404 handler is registered that returns the same JSON envelope shape — not the framework default HTML page',
+          'tests/test_error_envelope.py drives a 404 path and a server-error path and asserts the JSON shape on both',
+          'no existing handler behaviour is changed: only error/404/exception paths are normalized',
+        ],
+        expected_changed_files: ['app.py', 'tests/test_error_envelope.py'],
+        verification_commands: ['python3 -m pytest tests/test_error_envelope.py -q'],
+        priority: f.severity,
+        status: 'pending',
+      };
+    case 'missing_llm_streaming_response':
+      return {
+        id: shortId('task'),
+        iteration_id: iterationId,
+        assigned_to: 'executor',
+        title: 'Add LLM streaming response surface',
+        description: f.message,
+        acceptance_criteria: [
+          'a streaming endpoint exists (e.g. POST /chat/stream) that returns text/event-stream',
+          'the streaming handler invokes the LLM client with stream=True and yields each delta as an SSE data: frame',
+          'tests/test_streaming.py drives the streaming endpoint with a mocked streaming client and asserts the text/event-stream content type plus the data: framing',
+          'a terminating sentinel (e.g. data: [DONE]) is emitted before the response generator finishes',
+        ],
+        expected_changed_files: ['streaming.py', 'tests/test_streaming.py', 'app.py'],
+        verification_commands: ['python3 -m pytest tests/test_streaming.py -q'],
+        priority: f.severity,
+        status: 'pending',
+      };
+    case 'missing_llm_prompt_template_registry':
+      return {
+        id: shortId('task'),
+        iteration_id: iterationId,
+        assigned_to: 'executor',
+        title: 'Add LLM prompt template registry',
+        description: f.message,
+        acceptance_criteria: [
+          'prompts/ directory ships at least one *.txt or *.j2 template (e.g. prompts/chat_system.txt)',
+          'prompts.py (or src/prompts.py) module exposes a load_prompt(name) / render_prompt(name, **vars) registry that reads from prompts/',
+          'app.py imports prompts and references at least one template by name (no inline 50+-char system/user prompt strings)',
+          'tests/test_prompt_registry.py asserts load_prompt("chat_system") returns a non-empty string',
+        ],
+        expected_changed_files: ['prompts/chat_system.txt', 'prompts.py', 'tests/test_prompt_registry.py', 'app.py'],
+        verification_commands: ['python3 -m pytest tests/test_prompt_registry.py -q'],
+        priority: f.severity,
+        status: 'pending',
+      };
+    case 'missing_notebook_runtime_execution_test':
+      return {
+        id: shortId('task'),
+        iteration_id: iterationId,
+        assigned_to: 'executor',
+        title: 'Add notebook runtime execution test',
+        description: f.message,
+        acceptance_criteria: [
+          'tests/test_notebook_runtime.py is created',
+          'the test discovers every .ipynb under the project',
+          'the test executes each notebook via nbclient.NotebookClient / papermill / jupyter nbconvert --execute',
+          'the test asserts no cell raised an exception during execution',
+          'requirements include nbclient and nbformat (or papermill)',
+        ],
+        expected_changed_files: ['tests/test_notebook_runtime.py', 'requirements.txt'],
+        verification_commands: ['python3 -m pytest tests/test_notebook_runtime.py -q'],
+        priority: f.severity,
+        status: 'pending',
+      };
+    case 'missing_worker_runtime_enqueue_test':
+      return {
+        id: shortId('task'),
+        iteration_id: iterationId,
+        assigned_to: 'executor',
+        title: 'Add worker runtime enqueue test',
+        description: f.message,
+        acceptance_criteria: [
+          'tests/test_worker_runtime.py is created',
+          'the test enqueues a synthetic job (file-based queue, in-memory list, or Celery .apply())',
+          'the test calls the worker entry function (drain_once, process_job, run_worker, …)',
+          'the test asserts the expected side effect: queue drained, result file populated, return value reflects work done',
+          'the test does not depend on a real broker, network or production data',
+        ],
+        expected_changed_files: ['tests/test_worker_runtime.py'],
+        verification_commands: ['python3 -m pytest tests/test_worker_runtime.py -q'],
+        priority: f.severity,
+        status: 'pending',
+      };
+    case 'missing_config_runtime_load_test':
+      return {
+        id: shortId('task'),
+        iteration_id: iterationId,
+        assigned_to: 'executor',
+        title: 'Add config runtime load test',
+        description: f.message,
+        acceptance_criteria: [
+          'tests/test_config_runtime.py (Python) or tests/config-runtime.test.mjs (Node) is created',
+          'the test sets every detected env var to a synthetic value via monkeypatch.setenv (Python) or process.env (Node)',
+          'the test imports the main config/app module under those synthetic values and asserts no exception is raised',
+          'the test asserts at least one parsed config value reflects the synthetic env value (round-trip)',
+          'the test does not depend on real secrets, external services or production env files',
+        ],
+        expected_changed_files: ['tests/test_config_runtime.py', 'tests/config-runtime.test.mjs'],
+        verification_commands: ['python3 -m pytest tests/test_config_runtime.py -q'],
+        priority: f.severity,
+        status: 'pending',
+      };
+    case 'missing_api_runtime_behaviour_test':
+      return {
+        id: shortId('task'),
+        iteration_id: iterationId,
+        assigned_to: 'executor',
+        title: 'Add API runtime behaviour test',
+        description: f.message,
+        acceptance_criteria: [
+          'tests/test_api_runtime.py (Python) or tests/api-runtime.test.mjs (Node) is created',
+          'the test loads the real application module with isolated config (no real API keys, no production database)',
+          'the test calls at least one detected route through an in-process test client (Flask test_client, FastAPI TestClient, supertest, Hono fetch, Fastify inject)',
+          'the test asserts the handler ran — status code is not 404, response body or shape matches the route contract',
+          'the test does not depend on network reachability or external services',
+        ],
+        expected_changed_files: ['tests/test_api_runtime.py', 'tests/api-runtime.test.mjs'],
+        verification_commands: ['python3 -m pytest tests/test_api_runtime.py -q'],
+        priority: f.severity,
+        status: 'pending',
+      };
+    case 'missing_db_crud_runtime_tests':
+      return {
+        id: shortId('task'),
+        iteration_id: iterationId,
+        assigned_to: 'executor',
+        title: 'Add database CRUD round-trip tests',
+        description: f.message,
+        acceptance_criteria: [
+          'tests/test_db_crud_roundtrip.py runs INSERT, SELECT and DELETE against an isolated database',
+          'test inserts a row, fetches it back and asserts the content matches',
+          'test deletes the row and asserts a subsequent fetch no longer returns it',
+          'the test does not depend on global state outside the application API',
+        ],
+        expected_changed_files: ['tests/test_db_crud_roundtrip.py', 'app.py'],
+        verification_commands: ['python3 -m pytest tests/test_db_crud_roundtrip.py -q'],
+        priority: f.severity,
+        status: 'pending',
+      };
+    case 'missing_multi_service_integration_check':
+      return {
+        id: shortId('task'),
+        iteration_id: iterationId,
+        assigned_to: 'executor',
+        title: 'Add multi-service integration test',
+        description: f.message,
+        acceptance_criteria: [
+          'tests/test_multi_service_integration.py boots the producer service and drives the consumer service',
+          'the test asserts state propagates from one service to the other (queue, db, or shared store)',
+          'the test points services at isolated paths and does not leak global state',
+          'docs/multi-service-contract.md records the service boundaries and the shared transport',
+        ],
+        expected_changed_files: ['tests/test_multi_service_integration.py', 'docs/multi-service-contract.md'],
+        verification_commands: ['python3 -m pytest tests/test_multi_service_integration.py -q'],
         priority: f.severity,
         status: 'pending',
       };
@@ -1329,6 +1695,20 @@ function buildTaskForFinding(
       }
       if (f.category === 'missing_recommended_file' && f.related_files.some((file) => file === 'Dockerfile' || file === 'wsgi.py')) {
         return flaskDeploymentScaffoldTask(iterationId, f);
+      }
+      if (f.category === 'missing_recommended_file' && f.related_files.includes('Makefile')) {
+        return {
+          id: shortId('task'),
+          iteration_id: iterationId,
+          assigned_to: 'executor',
+          title: 'Add Makefile with project commands',
+          description: f.message,
+          acceptance_criteria: ['Makefile exists', 'exposes test/build/install targets'],
+          expected_changed_files: ['Makefile'],
+          verification_commands: ['test -s Makefile'],
+          priority: f.severity,
+          status: 'pending',
+        };
       }
       return {
         id: shortId('task'),

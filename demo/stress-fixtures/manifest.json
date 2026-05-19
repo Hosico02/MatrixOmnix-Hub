@@ -9,9 +9,9 @@
   {
     "id": "02-api-demo",
     "name": "Python API demo",
-    "expected_findings": ["missing_api_contract_harness", "missing_config_contract_harness"],
-    "expected_plan_titles": ["Add API contract harness", "Add config contract harness"],
-    "expected_product_files": ["docs/api-contract.md", "scripts/api-contract-check.mjs", "docs/config-contract.md", "scripts/config-contract-check.mjs", ".env.example", "package.json"]
+    "expected_findings": ["missing_api_contract_harness", "missing_config_contract_harness", "missing_api_runtime_behaviour_test", "missing_api_error_envelope"],
+    "expected_plan_titles": ["Add API contract harness", "Add config contract harness", "Add API runtime behaviour test"],
+    "expected_product_files": ["docs/api-contract.md", "scripts/api-contract-check.mjs", "docs/config-contract.md", "scripts/config-contract-check.mjs", ".env.example", "package.json", "tests/test_api_runtime.py", "tests/test_error_envelope.py"]
   },
   {
     "id": "03-cli-demo",
@@ -23,64 +23,110 @@
   {
     "id": "04-llm-chat-demo",
     "name": "LLM app demo",
-    "expected_findings": ["missing_user_llm_provider_config"],
-    "expected_plan_titles": ["Add player-supplied LLM provider configuration"],
-    "expected_product_files": ["llm_config.py", "tests/test_llm_config.py", ".env.example"]
+    "expected_findings": [
+      "missing_user_llm_provider_config",
+      "missing_llm_prompt_eval_harness",
+      "missing_llm_provider_failure_fallback",
+      "missing_llm_token_budget_enforcement",
+      "missing_llm_prompt_template_registry",
+      "missing_llm_streaming_response",
+      "missing_api_error_envelope"
+    ],
+    "expected_plan_titles": [
+      "Add player-supplied LLM provider configuration",
+      "Add LLM prompt evaluation harness"
+    ],
+    "expected_product_files": [
+      "llm_config.py",
+      "tests/test_llm_config.py",
+      ".env.example",
+      "tests/test_prompt_eval.py",
+      "tests/prompts/intro.json",
+      "tests/test_provider_fallback.py",
+      "tests/test_token_budget.py",
+      "tests/test_prompt_registry.py",
+      "prompts.py",
+      "prompts/chat_system.txt",
+      "streaming.py",
+      "tests/test_streaming.py",
+      "tests/test_error_envelope.py"
+    ]
   },
   {
     "id": "05-game-demo",
     "name": "Game demo",
-    "expected_findings": ["missing_game_contract_harness"],
-    "expected_plan_titles": ["Add demo surface contract matrix", "Add game runtime contract harness"],
-    "expected_product_files": ["docs/productization-surface-map.md", "scripts/surface-contract-check.mjs", "docs/game-contract.md", "scripts/game-contract-check.mjs"]
+    "expected_findings": ["missing_game_contract_harness", "missing_game_runtime_loop_test"],
+    "expected_plan_titles": ["Add demo surface contract matrix", "Add game runtime contract harness", "Add game runtime loop test"],
+    "expected_product_files": ["docs/productization-surface-map.md", "scripts/surface-contract-check.mjs", "docs/game-contract.md", "scripts/game-contract-check.mjs", "tests/game-runtime.test.mjs"]
   },
   {
     "id": "06-webgl-3d-demo",
     "name": "3D WebGL demo",
-    "expected_findings": ["missing_3d_scene_contract_harness"],
-    "expected_plan_titles": ["Add demo surface contract matrix", "Add 3D scene contract harness"],
-    "expected_product_files": ["docs/productization-surface-map.md", "scripts/surface-contract-check.mjs", "docs/3d-scene-contract.md", "scripts/3d-scene-contract-check.mjs"]
+    "expected_findings": ["missing_3d_scene_contract_harness", "missing_3d_scene_runtime_render_test"],
+    "expected_plan_titles": ["Add demo surface contract matrix", "Add 3D scene contract harness", "Add 3D scene runtime render test"],
+    "expected_product_files": ["docs/productization-surface-map.md", "scripts/surface-contract-check.mjs", "docs/3d-scene-contract.md", "scripts/3d-scene-contract-check.mjs", "tests/scene-runtime.test.mjs"]
   },
   {
     "id": "07-ml-inference-demo",
     "name": "ML inference demo",
-    "expected_findings": ["missing_ml_model_contract_harness"],
-    "expected_plan_titles": ["Add demo surface contract matrix", "Add ML model contract harness"],
-    "expected_product_files": ["docs/productization-surface-map.md", "scripts/surface-contract-check.mjs", "docs/ml-model-contract.md", "scripts/ml-model-contract-check.mjs"]
+    "expected_findings": ["missing_ml_model_contract_harness", "missing_ml_model_runtime_inference_test"],
+    "expected_plan_titles": ["Add demo surface contract matrix", "Add ML model contract harness", "Add ML model runtime inference test"],
+    "expected_product_files": ["docs/productization-surface-map.md", "scripts/surface-contract-check.mjs", "docs/ml-model-contract.md", "scripts/ml-model-contract-check.mjs", "tests/ml-runtime.test.mjs"]
   },
   {
     "id": "08-media-pipeline-demo",
     "name": "Media pipeline demo",
-    "expected_findings": ["missing_media_pipeline_contract_harness"],
-    "expected_plan_titles": ["Add demo surface contract matrix", "Add media pipeline contract harness"],
-    "expected_product_files": ["docs/productization-surface-map.md", "scripts/surface-contract-check.mjs", "docs/media-pipeline-contract.md", "scripts/media-pipeline-contract-check.mjs"]
+    "expected_findings": ["missing_media_pipeline_contract_harness", "missing_media_pipeline_runtime_test"],
+    "expected_plan_titles": ["Add demo surface contract matrix", "Add media pipeline contract harness", "Add media pipeline runtime test"],
+    "expected_product_files": ["docs/productization-surface-map.md", "scripts/surface-contract-check.mjs", "docs/media-pipeline-contract.md", "scripts/media-pipeline-contract-check.mjs", "tests/media-runtime.test.mjs"]
   },
   {
     "id": "09-browser-extension-demo",
     "name": "Browser extension demo",
-    "expected_findings": ["missing_browser_extension_contract_harness"],
-    "expected_plan_titles": ["Add demo surface contract matrix", "Add browser extension contract harness"],
-    "expected_product_files": ["docs/productization-surface-map.md", "scripts/surface-contract-check.mjs", "docs/browser-extension-contract.md", "scripts/browser-extension-contract-check.mjs"]
+    "expected_findings": ["missing_browser_extension_contract_harness", "missing_browser_extension_runtime_manifest_test"],
+    "expected_plan_titles": ["Add demo surface contract matrix", "Add browser extension contract harness", "Add browser extension runtime manifest test"],
+    "expected_product_files": ["docs/productization-surface-map.md", "scripts/surface-contract-check.mjs", "docs/browser-extension-contract.md", "scripts/browser-extension-contract-check.mjs", "tests/extension-runtime.test.mjs"]
   },
   {
     "id": "10-notebook-demo",
     "name": "Notebook demo",
-    "expected_findings": ["missing_notebook_contract_harness"],
-    "expected_plan_titles": ["Add demo surface contract matrix", "Add notebook reproducibility contract harness"],
-    "expected_product_files": ["docs/productization-surface-map.md", "scripts/surface-contract-check.mjs", "docs/notebook-contract.md", "scripts/notebook-contract-check.mjs"]
+    "expected_findings": ["missing_notebook_contract_harness", "missing_notebook_runtime_execution_test"],
+    "expected_plan_titles": ["Add demo surface contract matrix", "Add notebook reproducibility contract harness", "Add notebook runtime execution test"],
+    "expected_product_files": ["docs/productization-surface-map.md", "scripts/surface-contract-check.mjs", "docs/notebook-contract.md", "scripts/notebook-contract-check.mjs", "tests/test_notebook_runtime.py"]
   },
   {
     "id": "11-mobile-demo",
     "name": "Mobile app demo",
-    "expected_findings": ["missing_mobile_contract_harness"],
-    "expected_plan_titles": ["Add demo surface contract matrix", "Add mobile app contract harness"],
-    "expected_product_files": ["docs/productization-surface-map.md", "scripts/surface-contract-check.mjs", "docs/mobile-contract.md", "scripts/mobile-contract-check.mjs"]
+    "expected_findings": ["missing_mobile_contract_harness", "missing_mobile_runtime_bundle_test"],
+    "expected_plan_titles": ["Add demo surface contract matrix", "Add mobile app contract harness", "Add mobile runtime bundle test"],
+    "expected_product_files": ["docs/productization-surface-map.md", "scripts/surface-contract-check.mjs", "docs/mobile-contract.md", "scripts/mobile-contract-check.mjs", "tests/mobile-runtime.test.mjs"]
   },
   {
     "id": "12-desktop-demo",
     "name": "Desktop app demo",
-    "expected_findings": ["missing_desktop_contract_harness"],
-    "expected_plan_titles": ["Add demo surface contract matrix", "Add desktop app contract harness"],
-    "expected_product_files": ["docs/productization-surface-map.md", "scripts/surface-contract-check.mjs", "docs/desktop-contract.md", "scripts/desktop-contract-check.mjs"]
+    "expected_findings": ["missing_desktop_contract_harness", "missing_desktop_runtime_boot_test"],
+    "expected_plan_titles": ["Add demo surface contract matrix", "Add desktop app contract harness", "Add desktop runtime boot test"],
+    "expected_product_files": ["docs/productization-surface-map.md", "scripts/surface-contract-check.mjs", "docs/desktop-contract.md", "scripts/desktop-contract-check.mjs", "tests/desktop-runtime.test.mjs"]
+  },
+  {
+    "id": "13-db-crud-demo",
+    "name": "SQLite CRUD Flask demo",
+    "expected_findings": ["missing_db_crud_runtime_tests", "missing_data_migration_harness", "missing_api_error_envelope"],
+    "expected_plan_titles": ["Add database CRUD round-trip tests", "Add data migration contract harness"],
+    "expected_product_files": ["tests/test_db_crud_roundtrip.py", "docs/data-contract.md", "scripts/data-contract-check.mjs", "tests/test_error_envelope.py"]
+  },
+  {
+    "id": "14-multi-service-repo-demo",
+    "name": "Multi-service api+worker+web repo",
+    "expected_findings": ["missing_multi_service_integration_check"],
+    "expected_plan_titles": ["Add multi-service integration test"],
+    "expected_product_files": ["tests/test_multi_service_integration.py", "docs/multi-service-contract.md"]
+  },
+  {
+    "id": "15-worker-runtime-demo",
+    "name": "Standalone Python worker demo",
+    "expected_findings": ["missing_worker_runtime_enqueue_test", "missing_worker_contract_harness"],
+    "expected_plan_titles": ["Add worker runtime enqueue test", "Add worker contract harness"],
+    "expected_product_files": ["tests/test_worker_runtime.py", "docs/worker-contract.md", "scripts/worker-contract-check.mjs"]
   }
 ]

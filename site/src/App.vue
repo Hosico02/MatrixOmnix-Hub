@@ -31,7 +31,7 @@
             </div>
 
             <p class="subcopy">
-              MatrixOmnix is currently in beta: a multi-agent harness for turning rough demos into verified product baselines, with market-aware gates and premise-preserving agent workflows.
+              MatrixOmnix is currently in beta: a multi-agent harness for turning rough demos into verified product baselines. 15 out of 15 stress fixtures reach product-ready, 737 vitest tests pass, and every product surface is gated across three honest tiers — structural contract, behavioural runtime, and productization surface.
             </p>
           </div>
         </section>
@@ -47,6 +47,31 @@
             Use the CLI to run controlled iterations, inspect evidence, replay QA regressions and decide when a demo is product-ready.
           </FlipPanel>
         </section>
+
+        <section class="sibling-card" aria-label="Sibling project d2p">
+          <div class="sibling-card__body">
+            <div class="sibling-card__kicker">Sibling project</div>
+            <h2 class="sibling-card__title">
+              <a href="https://github.com/Hosico02/d2p" target="_blank" rel="noopener">d2p</a>
+              — the minimal agent-driven demo-to-product loop
+            </h2>
+            <p class="sibling-card__copy">
+              The same demo-to-product idea expressed in roughly 4,000 lines of Python with <strong>no hardcoded demo-type detectors</strong>. An Analyzer agent searches the web for mature competitor products, a Planner diffs them against your demo, and parallel Executors fill the gaps. A QA agent emits failing tests as bug reports that become a permanent regression corpus. Adding a new domain — audio, blockchain, robotics, anything — needs zero code changes.
+            </p>
+            <ul class="sibling-card__bullets">
+              <li><strong>~4k LOC Python</strong> total core vs MatrixOmnix's ~41k TypeScript</li>
+              <li>Pure LLM analysis, no hardcoded gap detectors or fixture catalogue</li>
+              <li>MiniMax, Claude, Codex or Claude CLI via a per-role model router</li>
+              <li>Health snapshot + baseline-test rollback prevents silent regressions</li>
+            </ul>
+            <p class="sibling-card__pair">
+              MatrixOmnix and d2p are complementary: MatrixOmnix's hardened pipeline gives strong inflation resistance on known archetypes; d2p's minimal loop generalises to new ones at zero marginal cost.
+            </p>
+            <a class="sibling-card__cta" href="https://github.com/Hosico02/d2p" target="_blank" rel="noopener">
+              View Hosico02/d2p on GitHub →
+            </a>
+          </div>
+        </section>
       </template>
 
       <section v-else-if="page === 'about'" class="content-page about-page" id="about">
@@ -56,16 +81,16 @@
 
         <div class="image-grid" aria-label="MatrixOmnix framework diagrams">
           <figure>
-            <img src="./assets/framework-loop.svg" alt="MatrixOmnix multi-agent loop from intake through analyzer, planner, executor, verifier, reviewer and QA memory." />
-            <figcaption>Multi-agent productization loop</figcaption>
+            <img src="./assets/framework-loop.png" alt="MatrixOmnix multi-agent loop diagram: Analyzer, Planner, Executor, Verifier, Reviewer, QA Memory, with opt-in web research and advisory critics." />
+            <figcaption>Multi-agent loop · with opt-in web research</figcaption>
           </figure>
           <figure>
-            <img src="./assets/harness-map.svg" alt="MatrixOmnix harness map covering UI, CLI, API, config, data and worker contracts." />
-            <figcaption>Harness coverage map</figcaption>
+            <img src="./assets/harness-map.png" alt="MatrixOmnix harness coverage map: 15 product surfaces across three honest tiers — structural contract (always-on), behavioural runtime (skips when the surface's runtime lib is absent), and productization surface (operational maturity gates above runtime)." />
+            <figcaption>3 tiers · structural · behavioural · productization</figcaption>
           </figure>
           <figure>
-            <img src="./assets/deployment-flow.svg" alt="MatrixOmnix beta roadmap from local CLI usage to managed workspaces and hosted orchestration." />
-            <figcaption>Beta-to-hosted roadmap</figcaption>
+            <img src="./assets/deployment-flow.png" alt="MatrixOmnix roadmap: shipped today, planned next, and explicitly not in scope yet." />
+            <figcaption>Roadmap · shipped, planned, not yet in scope</figcaption>
           </figure>
         </div>
 
@@ -100,7 +125,7 @@
           <article>
             <h2>Current state</h2>
             <p>
-              MatrixOmnix can already lift rough repositories into stronger engineering baselines by adding tests, runtime contracts, configuration checks, documentation, deployment hooks, UI harnesses and QA regression memory. The latest live MiniMax-M2.7-highspeed run on a restored agent-facing werewolf demo reached a 97/100 production-ready baseline with zero open findings and 33 passing pytest cases in three iterations, with no repair task. The built-in stress suite also reaches product-ready on 12/12 demo fixtures across UI, API, CLI, LLM chat, game, WebGL/3D, ML inference, media pipeline, browser extension, notebook, mobile and desktop surfaces.
+              MatrixOmnix can already lift rough repositories into stronger engineering baselines by adding tests, runtime contracts, configuration checks, documentation, deployment hooks, UI harnesses and QA regression memory. The latest live MiniMax-M2.7-highspeed run on a restored agent-facing werewolf demo reached a 97/100 production-ready baseline with zero open findings and 33 passing pytest cases in three iterations, with no repair task. The built-in stress suite now reaches product-ready on 15/15 demo fixtures, the vitest suite reports 737/737 passing, and every product surface is gated across three honest tiers — tier-1 structural contract (always-on), tier-2 behavioural runtime (skips with a diagnostic when the surface's runtime lib is absent), and tier-3 productization surface (operational gates above runtime). Each surface emits a blocker- or high-severity finding when its runtime code path is unverified: API surfaces must answer a test-client HTTP round trip and ship a structured <code>{error, message, status}</code> JSON envelope for 404 and uncaught exceptions; config surfaces must load under synthetic env values (Python and Node); workers must enqueue and drain a job end-to-end (Python and Node); notebooks must execute every cell through nbclient; CLI binaries must exit cleanly on both <code>--help</code> and a real positional argument; DB CRUD surfaces must prove insert → select → delete round-trips; multi-service repos must drive cross-service state propagation; media pipelines must actually pipe a synthetic input through sharp / ffmpeg / canvas; and the specialized Node surfaces (ML inference, game loop, 3D scene render, browser extension manifest, mobile bundle, desktop boot) each carry a dynamic-import runtime test that exercises the real library when available and records an explicit diagnostic when not. For LLM chat demos with a real <code>/chat</code>-style HTTP surface, MatrixOmnix gates the full productization suite: prompt-eval harness with golden cases, mocked provider failure fallback returning structured 5xx, <code>MAX_MESSAGE_LENGTH</code> guard rejecting oversized input, <code>prompts/</code> template registry, and a generated <code>streaming.py</code> SSE endpoint — all driven by chat-route detection rather than just an LLM dependency, so LLM-backed simulation servers stay correctly classified.
             </p>
           </article>
           <article>
@@ -135,8 +160,8 @@
           <ol class="usage-steps">
             <li><strong>Analyze</strong><span>Detect runtime, dependencies, entrypoints, UI/API/CLI/data/worker surfaces, secrets risk and missing project contracts.</span></li>
             <li><strong>Plan</strong><span>Convert gaps into scoped work with acceptance checks, fallback paths and evidence requirements; broad deterministic backlogs can be batched more aggressively.</span></li>
-            <li><strong>Iterate</strong><span>Run one or more controlled executor rounds, then inspect generated reports before trusting the result.</span></li>
-            <li><strong>Verify</strong><span>Run <code>matrixomnix gap --project ./demo</code>; by default it executes detected tests/builds and caps the score when evidence is red.</span></li>
+            <li><strong>Iterate</strong><span>Run one or more controlled executor rounds, then inspect generated reports before trusting the result. Each productized surface ships gates in three tiers — structural, behavioural and productization — so passing tests at one tier does not let the project skip the next.</span></li>
+            <li><strong>Verify</strong><span>Run <code>matrixomnix gap --project ./demo</code>; by default it executes detected tests/builds and caps the score when evidence is red. Generated harnesses include API runtime + error envelope, config + worker runtime (Python and Node), and the full LLM chat productization suite when a real <code>/chat</code>-style route is detected.</span></li>
           </ol>
         </section>
 
