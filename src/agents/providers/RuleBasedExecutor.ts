@@ -2484,6 +2484,7 @@ interface LlmChatLayout {
   responseField: string; // "reply" or "response" or "content"
   clientClassName: string; // "OpenAI" / "Anthropic" / etc.
   appEntryRel: string; // relative path to the app entry file
+  framework: 'flask' | 'fastapi';
 }
 
 const LLM_APP_ENTRY_CANDIDATES = ['app.py', 'main.py', 'src/app.py', 'src/main.py', 'server/app.py', 'api/app.py'];
@@ -2518,6 +2519,7 @@ async function detectLlmChatLayout(projectPath: string): Promise<LlmChatLayout |
       const m = handlerSlice.match(/jsonify\s*\(\s*\{[^}]*['"](\w+)['"]\s*:\s*response/);
       if (m && m[1]) responseField = m[1];
     }
+    const framework: 'flask' | 'fastapi' = /\bfrom\s+fastapi\s+import\b|\bimport\s+fastapi\b|\bFastAPI\s*\(/.test(text) ? 'fastapi' : 'flask';
     return {
       appModule: rel.replace(/\.py$/, '').replace(/\//g, '.'),
       chatRoute,
@@ -2525,14 +2527,40 @@ async function detectLlmChatLayout(projectPath: string): Promise<LlmChatLayout |
       responseField,
       clientClassName,
       appEntryRel: rel,
+      framework,
     };
   }
   return null;
 }
 
+// Python idioms for inspecting a test-client response. Flask's WrapperTestResponse
+// exposes `data` (bytes), `get_json()`, and `is_json`. httpx's TestClient response
+// exposes `content` (bytes), `text` (str), `json()`, and content-type via headers.
+// `responseBodySnippet` returns a short bytes-or-str preview for assertion
+// messages; `responseJsonExpr` returns a Python expression yielding the
+// decoded JSON body (or {} on parse failure).
+function responseBodySnippet(layout: LlmChatLayout): string {
+  return layout.framework === 'fastapi' ? 'response.content[:300]' : 'response.data[:300]';
+}
+function responseJsonExpr(layout: LlmChatLayout): string {
+  return layout.framework === 'fastapi'
+    ? '(response.json() if response.content else {})'
+    : '(response.get_json() or {})';
+}
+
 function renderLlmFakeProviderFixtureBlock(layout: LlmChatLayout): string {
   // Reusable Python block: defines a fake OpenAI-shaped client + a `chat_client`
   // pytest fixture that monkeypatches the app module's client class to the fake.
+  // The fixture knows whether the host is Flask or FastAPI so the test client
+  // is constructed correctly in both cases.
+  const clientLines = layout.framework === 'fastapi'
+    ? [
+      '    from fastapi.testclient import TestClient',
+      '    yield TestClient(app_module.app, raise_server_exceptions=False)',
+    ]
+    : [
+      '    yield app_module.app.test_client()',
+    ];
   return [
     'class _FakeMessage:',
     '    def __init__(self, content):',
@@ -2573,7 +2601,14 @@ function renderLlmFakeProviderFixtureBlock(layout: LlmChatLayout): string {
     '    importlib.reload(app_module)',
     `    if hasattr(app_module, "${layout.clientClassName}"):`,
     `        monkeypatch.setattr(app_module, "${layout.clientClassName}", _FakeLlmClient)`,
-    '    yield app_module.app.test_client()',
+    '    # If the host module eagerly constructed a client instance at import',
+    '    # time (common in FastAPI demos), patch the instance directly too —',
+    '    # otherwise patching the class alone has no effect on the pre-built',
+    '    # client.',
+    '    for _client_attr in ("client", "llm_client", "openai_client", "anthropic_client"):',
+    '        if hasattr(app_module, _client_attr):',
+    '            monkeypatch.setattr(app_module, _client_attr, _FakeLlmClient())',
+    ...clientLines,
     '',
   ].join('\n');
 }
@@ -2637,9 +2672,9 @@ const writeLlmPromptEvalHarness: Handler = async (projectPath) => {
     `    response = chat_client.post("${layout.chatRoute}", json=case["input"])`,
     '    assert response.status_code == 200, (',
     '        f"chat endpoint should accept the prompt case {case_path.stem!r} when the provider is mocked, "',
-    '        f"got {response.status_code}: {response.data[:300]!r}"',
+    `        f"got {response.status_code}: {${responseBodySnippet(layout)}!r}"`,
     '    )',
-    '    body = response.get_json() or {}',
+    `    body = ${responseJsonExpr(layout)}`,
     '    for key in case.get("expected", {}).get("required_keys", []):',
     '        assert key in body, f"response should include key {key!r}, got keys {list(body.keys())}"',
     '    min_len = case.get("expected", {}).get("min_reply_length", 0)',
@@ -2701,7 +2736,15 @@ const writeLlmProviderFailureFallbackTest: Handler = async (projectPath) => {
     '    importlib.reload(app_module)',
     `    if hasattr(app_module, "${layout.clientClassName}"):`,
     `        monkeypatch.setattr(app_module, "${layout.clientClassName}", _RaisingLlmClient)`,
-    '    yield app_module.app.test_client()',
+    '    for _client_attr in ("client", "llm_client", "openai_client", "anthropic_client"):',
+    '        if hasattr(app_module, _client_attr):',
+    '            monkeypatch.setattr(app_module, _client_attr, _RaisingLlmClient())',
+    ...(layout.framework === 'fastapi'
+      ? [
+        '    from fastapi.testclient import TestClient',
+        '    yield TestClient(app_module.app, raise_server_exceptions=False)',
+      ]
+      : ['    yield app_module.app.test_client()']),
     '',
     '',
     'def test_chat_handles_provider_failure_gracefully(chat_client):',
@@ -2715,11 +2758,11 @@ const writeLlmProviderFailureFallbackTest: Handler = async (projectPath) => {
     '    # Acceptable graceful statuses for upstream provider failure.',
     '    assert response.status_code in (429, 502, 503, 504), (',
     '        f"chat handler should degrade to a graceful 4xx/5xx when the LLM provider raises, "',
-    '        f"got status={response.status_code} body={response.data[:300]!r} — "',
+    `        f"got status={response.status_code} body={${responseBodySnippet(layout)}!r} — "`,
     '        "wrap the provider call in try/except in the chat handler and return 503 (or 502 / 429 / 504) with a structured error body."',
     '    )',
     '    # Body should still be JSON-parseable and carry an error indicator.',
-    '    body = response.get_json() or {}',
+    `    body = ${responseJsonExpr(layout)}`,
     '    assert "error" in body or "message" in body, (',
     '        f"graceful-failure response should include an error/message key for the client to render, got {body!r}"',
     '    )',
@@ -2761,27 +2804,53 @@ async function wrapLlmProviderCallWithFallback(projectPath: string, layout: LlmC
   if (!createLineMatch) return false;
   const [createLine, indent, varName, expr] = createLineMatch;
   if (!createLine || indent === undefined) return false;
-  // Re-indent every line of the (possibly multi-line) create() call by 4 spaces
-  // so Python parses cleanly inside the new try-block.
+  // Re-indent every line of the (possibly multi-line) create() call by 4 spaces.
   const reindentedExpr = (expr ?? '').split('\n').map((line, i) => (i === 0 ? line : '    ' + line)).join('\n');
+  const isFastApi = layout.framework === 'fastapi';
+  const returnStmt = isFastApi
+    ? `${indent}    return JSONResponse(status_code=503, content={"error": "provider_unavailable", "message": "upstream LLM provider is currently unavailable", "detail": str(exc)[:240]})`
+    : `${indent}    return jsonify({"error": "provider_unavailable", "message": "upstream LLM provider is currently unavailable", "detail": str(exc)[:240]}), 503`;
   const wrapped = [
     `${indent}try:`,
     `${indent}    ${varName} = ${reindentedExpr}`,
     `${indent}except Exception as exc:`,
     `${indent}    logger.warning("llm_provider_failure", extra={"error": str(exc)[:240]}) if "logger" in globals() else None`,
-    `${indent}    return jsonify({"error": "provider_unavailable", "message": "upstream LLM provider is currently unavailable", "detail": str(exc)[:240]}), 503`,
+    returnStmt,
   ].join('\n');
   const newFnBody = fnBody.replace(createLine, wrapped);
-  const newText = text.replace(whole, `${decorator}${signature}${newFnBody}`);
-  if (newText === text) return false;
-  // Ensure jsonify is imported (Flask demos usually already have it; check just in case).
-  let finalText = newText;
-  if (!/\bjsonify\b/.test(finalText.split('\n').slice(0, 30).join('\n'))) {
-    finalText = finalText.replace(/from\s+flask\s+import\s+([^\n]+)/, (line, imports) => {
-      const list = imports.split(',').map((s: string) => s.trim());
-      if (!list.includes('jsonify')) list.push('jsonify');
-      return `from flask import ${list.join(', ')}`;
-    });
+  let finalText = text.replace(whole, `${decorator}${signature}${newFnBody}`);
+  if (finalText === text) return false;
+  if (isFastApi) {
+    // Ensure JSONResponse is imported.
+    if (!/\bfrom\s+fastapi\.responses\s+import\s+[^\n]*\bJSONResponse\b/.test(finalText)) {
+      if (/\bfrom\s+fastapi\.responses\s+import/.test(finalText)) {
+        finalText = finalText.replace(
+          /(\bfrom\s+fastapi\.responses\s+import\s+)([^\n]+)/,
+          (_m, prefix: string, imports: string) => {
+            if (/\bJSONResponse\b/.test(imports)) return `${prefix}${imports}`;
+            return `${prefix}${imports.trimEnd()}, JSONResponse`;
+          },
+        );
+      } else {
+        const lastImport = [...finalText.matchAll(/^(?:from|import)\s[^\n]+\n/gm)].pop();
+        const insertion = 'from fastapi.responses import JSONResponse\n';
+        if (lastImport) {
+          const end = lastImport.index! + lastImport[0].length;
+          finalText = finalText.slice(0, end) + insertion + finalText.slice(end);
+        } else {
+          finalText = insertion + finalText;
+        }
+      }
+    }
+  } else {
+    // Ensure jsonify is imported (Flask demos usually already have it).
+    if (!/\bjsonify\b/.test(finalText.split('\n').slice(0, 30).join('\n'))) {
+      finalText = finalText.replace(/from\s+flask\s+import\s+([^\n]+)/, (_line, imports: string) => {
+        const list = imports.split(',').map((s: string) => s.trim());
+        if (!list.includes('jsonify')) list.push('jsonify');
+        return `from flask import ${list.join(', ')}`;
+      });
+    }
   }
   await writeText(abs, finalText);
   return true;
@@ -2820,7 +2889,7 @@ const writeLlmTokenBudgetEnforcement: Handler = async (projectPath) => {
     `    response = chat_client.post("${layout.chatRoute}", json={**_LLM_FIELDS, "${layout.messageField}": oversized})`,
     '    assert response.status_code in (400, 413, 422), (',
     '        f"chat handler should reject inputs >= {OVERSIZED_LENGTH} chars before they reach the provider, "',
-    '        f"got status={response.status_code} body={response.data[:300]!r} — "',
+    `        f"got status={response.status_code} body={${responseBodySnippet(layout)}!r} — "`,
     '        "add a MAX_MESSAGE_LENGTH guard (or tiktoken-based token-count guard) that returns 400/413/422 with a structured error body."',
     '    )',
     '',
@@ -2829,7 +2898,7 @@ const writeLlmTokenBudgetEnforcement: Handler = async (projectPath) => {
     `    response = chat_client.post("${layout.chatRoute}", json={**_LLM_FIELDS, "${layout.messageField}": "Hello"})`,
     '    assert response.status_code == 200, (',
     '        f"chat handler should accept a normal-sized message when the provider is mocked, "',
-    '        f"got status={response.status_code} body={response.data[:300]!r}"',
+    `        f"got status={response.status_code} body={${responseBodySnippet(layout)}!r}"`,
     '    )',
     '',
   ].join('\n');
@@ -2866,9 +2935,13 @@ async function injectChatMessageLengthGuard(projectPath: string, layout: LlmChat
   const messageGetMatch = fnBody.match(messageGetRe);
   if (!messageGetMatch) return false;
   const varName = messageGetMatch[1];
+  const isFastApi = layout.framework === 'fastapi';
+  const guardReturn = isFastApi
+    ? `${indent}    return JSONResponse(status_code=413, content={"error": "message_too_long", "message": f"message exceeds {MAX_MESSAGE_LENGTH} character budget", "length": len(${varName})})`
+    : `${indent}    return jsonify({"error": "message_too_long", "message": f"message exceeds {MAX_MESSAGE_LENGTH} character budget", "length": len(${varName})}), 413`;
   const guardBlock = [
     `${indent}if isinstance(${varName}, str) and len(${varName}) > MAX_MESSAGE_LENGTH:`,
-    `${indent}    return jsonify({"error": "message_too_long", "message": f"message exceeds {MAX_MESSAGE_LENGTH} character budget", "length": len(${varName})}), 413`,
+    guardReturn,
     '',
   ].join('\n');
   const newFnBody = fnBody.replace(messageGetMatch[0], messageGetMatch[0] + guardBlock);
@@ -2880,6 +2953,27 @@ async function injectChatMessageLengthGuard(projectPath: string, layout: LlmChat
       newText = newText.replace(insertAfterImports[1], insertAfterImports[1] + '\nMAX_MESSAGE_LENGTH = 20_000\n');
     } else {
       newText = `MAX_MESSAGE_LENGTH = 20_000\n\n${newText}`;
+    }
+  }
+  // For FastAPI: also ensure JSONResponse is imported.
+  if (isFastApi && !/\bfrom\s+fastapi\.responses\s+import\s+[^\n]*\bJSONResponse\b/.test(newText)) {
+    if (/\bfrom\s+fastapi\.responses\s+import/.test(newText)) {
+      newText = newText.replace(
+        /(\bfrom\s+fastapi\.responses\s+import\s+)([^\n]+)/,
+        (_m, prefix: string, imports: string) => {
+          if (/\bJSONResponse\b/.test(imports)) return `${prefix}${imports}`;
+          return `${prefix}${imports.trimEnd()}, JSONResponse`;
+        },
+      );
+    } else {
+      const lastImport = [...newText.matchAll(/^(?:from|import)\s[^\n]+\n/gm)].pop();
+      const insertion = 'from fastapi.responses import JSONResponse\n';
+      if (lastImport) {
+        const end = lastImport.index! + lastImport[0].length;
+        newText = newText.slice(0, end) + insertion + newText.slice(end);
+      } else {
+        newText = insertion + newText;
+      }
     }
   }
   if (newText === text) return false;
@@ -2998,7 +3092,9 @@ const writeLlmStreamingResponse: Handler = async (projectPath) => {
     return { summary: 'no LLM chat route detected — skipped', changed_files: [] };
   }
   const streamingPath = path.join(projectPath, 'streaming.py');
-  const streamingBody = renderLlmStreamingModule(layout);
+  const streamingBody = layout.framework === 'fastapi'
+    ? renderLlmStreamingModuleFastApi(layout)
+    : renderLlmStreamingModule(layout);
   if (!fileExists(streamingPath) || ((await readTextSafe(streamingPath)) ?? '') !== streamingBody) {
     await writeText(streamingPath, streamingBody);
     changed.add('streaming.py');
@@ -3018,8 +3114,10 @@ const writeLlmStreamingResponse: Handler = async (projectPath) => {
       }
     }
     if (!new RegExp(`register_streaming_route\\s*\\(\\s*${layout.appEntryRel === 'app.py' ? 'app' : '\\w+'}\\s*\\)`).test(next)) {
-      // Append after the app constructor (look for `app = Flask(...)`).
-      const ctorRe = /^(\w+)\s*=\s*Flask\s*\([^)]*\)\s*$/m;
+      // Append after the app constructor (Flask or FastAPI).
+      const ctorRe = layout.framework === 'fastapi'
+        ? /^(\w+)\s*=\s*FastAPI\s*\([^)]*\)\s*$/m
+        : /^(\w+)\s*=\s*Flask\s*\([^)]*\)\s*$/m;
       const ctorMatch = next.match(ctorRe);
       if (ctorMatch) {
         next = next.replace(ctorRe, `${ctorMatch[0]}\n${callLine}`);
@@ -3035,7 +3133,9 @@ const writeLlmStreamingResponse: Handler = async (projectPath) => {
   const initPath = path.join(projectPath, 'tests', '__init__.py');
   if (!fileExists(initPath)) await writeText(initPath, '# pytest test package marker — keep this file non-empty.\n');
   const testPath = path.join(projectPath, 'tests', 'test_streaming.py');
-  const testBody = renderLlmStreamingTest(layout);
+  const testBody = layout.framework === 'fastapi'
+    ? renderLlmStreamingTestFastApi(layout)
+    : renderLlmStreamingTest(layout);
   if (!fileExists(testPath) || ((await readTextSafe(testPath)) ?? '') !== testBody) {
     await writeText(testPath, testBody);
     changed.add('tests/test_streaming.py');
@@ -3194,64 +3294,171 @@ function renderLlmStreamingTest(layout: LlmChatLayout): string {
 
 const writeApiErrorEnvelope: Handler = async (projectPath) => {
   const changed = new Set<string>();
-  const appAbs = path.join(projectPath, 'app.py');
-  const appText = await readTextSafe(appAbs);
-  if (!appText || !/\bFlask\s*\(/.test(appText)) {
-    return { summary: 'no Flask app.py — skipped (other frameworks not yet supported)', changed_files: [] };
+  // Find the app entry: try app.py / main.py / src/app.py / src/main.py
+  const candidates = ['app.py', 'main.py', 'src/app.py', 'src/main.py'];
+  let appAbs: string | null = null;
+  let appText: string | null = null;
+  let framework: 'flask' | 'fastapi' | null = null;
+  for (const rel of candidates) {
+    const abs = path.join(projectPath, rel);
+    const text = await readTextSafe(abs);
+    if (!text) continue;
+    if (/\bFastAPI\s*\(/.test(text)) {
+      appAbs = abs;
+      appText = text;
+      framework = 'fastapi';
+      break;
+    }
+    if (/\bFlask\s*\(/.test(text)) {
+      appAbs = abs;
+      appText = text;
+      framework = 'flask';
+      break;
+    }
+  }
+  if (!appAbs || !appText || !framework) {
+    return { summary: 'no Flask/FastAPI app entry — skipped (other frameworks not yet supported)', changed_files: [] };
   }
   let next = appText;
   const sentinel = '# d2p:error-envelope';
-  if (!next.includes(sentinel) && !/@app\.errorhandler\s*\(/.test(next)) {
-    // Ensure jsonify is imported.
-    if (!/\bfrom\s+flask\s+import\s+[^\n]*\bjsonify\b/.test(next)) {
-      next = next.replace(
-        /(\bfrom\s+flask\s+import\s+)([^\n]+)/,
-        (_m, prefix: string, imports: string) => {
-          if (/\bjsonify\b/.test(imports)) return `${prefix}${imports}`;
-          return `${prefix}${imports.trimEnd()}, jsonify`;
-        },
-      );
-    }
-    const block = [
-      '',
-      '',
-      sentinel,
-      '@app.errorhandler(404)',
-      'def _d2p_not_found(_exc):',
-      '    return jsonify({"error": "not_found", "message": "route not found", "status": 404}), 404',
-      '',
-      '',
-      '@app.errorhandler(Exception)',
-      'def _d2p_unhandled_exception(exc):',
-      '    return jsonify({',
-      '        "error": type(exc).__name__,',
-      '        "message": str(exc)[:300],',
-      '        "status": 500,',
-      '    }), 500',
-      '',
-    ].join('\n');
-    // Append at end of module — after any trailing if __name__ block, or just append.
-    const ifMainIdx = next.search(/^if\s+__name__\s*==\s*["']__main__["']\s*:/m);
-    if (ifMainIdx >= 0) {
-      next = next.slice(0, ifMainIdx).trimEnd() + '\n' + block + '\n\n' + next.slice(ifMainIdx);
+  const alreadyRegistered = framework === 'fastapi'
+    ? /@app\.exception_handler\s*\(/.test(next)
+    : /@app\.errorhandler\s*\(/.test(next);
+  if (!next.includes(sentinel) && !alreadyRegistered) {
+    if (framework === 'flask') {
+      // Ensure jsonify is imported.
+      if (!/\bfrom\s+flask\s+import\s+[^\n]*\bjsonify\b/.test(next)) {
+        next = next.replace(
+          /(\bfrom\s+flask\s+import\s+)([^\n]+)/,
+          (_m, prefix: string, imports: string) => {
+            if (/\bjsonify\b/.test(imports)) return `${prefix}${imports}`;
+            return `${prefix}${imports.trimEnd()}, jsonify`;
+          },
+        );
+      }
+      const block = [
+        '',
+        '',
+        sentinel,
+        '@app.errorhandler(404)',
+        'def _d2p_not_found(_exc):',
+        '    return jsonify({"error": "not_found", "message": "route not found", "status": 404}), 404',
+        '',
+        '',
+        '@app.errorhandler(Exception)',
+        'def _d2p_unhandled_exception(exc):',
+        '    return jsonify({',
+        '        "error": type(exc).__name__,',
+        '        "message": str(exc)[:300],',
+        '        "status": 500,',
+        '    }), 500',
+        '',
+      ].join('\n');
+      const ifMainIdx = next.search(/^if\s+__name__\s*==\s*["']__main__["']\s*:/m);
+      if (ifMainIdx >= 0) {
+        next = next.slice(0, ifMainIdx).trimEnd() + '\n' + block + '\n\n' + next.slice(ifMainIdx);
+      } else {
+        next = next.trimEnd() + '\n' + block + '\n';
+      }
     } else {
-      next = next.trimEnd() + '\n' + block + '\n';
+      // FastAPI: register handlers for StarletteHTTPException (covers 404)
+      // plus a generic Exception handler. Both return JSONResponse.
+      if (!/\bfrom\s+fastapi\.responses\s+import\s+[^\n]*\bJSONResponse\b/.test(next)) {
+        if (/\bfrom\s+fastapi\.responses\s+import/.test(next)) {
+          next = next.replace(
+            /(\bfrom\s+fastapi\.responses\s+import\s+)([^\n]+)/,
+            (_m, prefix: string, imports: string) => {
+              if (/\bJSONResponse\b/.test(imports)) return `${prefix}${imports}`;
+              return `${prefix}${imports.trimEnd()}, JSONResponse`;
+            },
+          );
+        } else {
+          // Add a new import line after the last existing import.
+          const lastImport = [...next.matchAll(/^(?:from|import)\s[^\n]+\n/gm)].pop();
+          const insertion = 'from fastapi.responses import JSONResponse\n';
+          if (lastImport) {
+            const end = lastImport.index! + lastImport[0].length;
+            next = next.slice(0, end) + insertion + next.slice(end);
+          } else {
+            next = insertion + next;
+          }
+        }
+      }
+      if (!/\bfrom\s+starlette\.exceptions\s+import\s+[^\n]*\bHTTPException\b/.test(next)
+        && !/\bfrom\s+fastapi\s+import\s+[^\n]*\bHTTPException\b/.test(next)) {
+        const lastImport = [...next.matchAll(/^(?:from|import)\s[^\n]+\n/gm)].pop();
+        const insertion = 'from starlette.exceptions import HTTPException as _D2PHttpException\n';
+        if (lastImport) {
+          const end = lastImport.index! + lastImport[0].length;
+          next = next.slice(0, end) + insertion + next.slice(end);
+        } else {
+          next = insertion + next;
+        }
+      }
+      const block = [
+        '',
+        '',
+        sentinel,
+        '@app.exception_handler(_D2PHttpException)',
+        'async def _d2p_http_exception(_request, exc):',
+        '    status = getattr(exc, "status_code", 500) or 500',
+        '    return JSONResponse(',
+        '        status_code=status,',
+        '        content={',
+        '            "error": "http_exception" if status != 404 else "not_found",',
+        '            "message": str(getattr(exc, "detail", "")) or ("route not found" if status == 404 else "request failed"),',
+        '            "status": status,',
+        '        },',
+        '    )',
+        '',
+        '',
+        '@app.exception_handler(Exception)',
+        'async def _d2p_unhandled_exception(_request, exc):',
+        '    return JSONResponse(',
+        '        status_code=500,',
+        '        content={',
+        '            "error": type(exc).__name__,',
+        '            "message": str(exc)[:300],',
+        '            "status": 500,',
+        '        },',
+        '    )',
+        '',
+      ].join('\n');
+      const ifMainIdx = next.search(/^if\s+__name__\s*==\s*["']__main__["']\s*:/m);
+      if (ifMainIdx >= 0) {
+        next = next.slice(0, ifMainIdx).trimEnd() + '\n' + block + '\n\n' + next.slice(ifMainIdx);
+      } else {
+        next = next.trimEnd() + '\n' + block + '\n';
+      }
     }
     if (next !== appText) {
       await writeText(appAbs, next);
-      changed.add('app.py');
+      changed.add(path.relative(projectPath, appAbs));
     }
   }
   const initPath = path.join(projectPath, 'tests', '__init__.py');
   if (!fileExists(initPath)) await writeText(initPath, '# pytest test package marker — keep this file non-empty.\n');
   const testPath = path.join(projectPath, 'tests', 'test_error_envelope.py');
-  const testBody = [
-    '"""Structured error-envelope contract test.',
-    '',
-    'Asserts that 404 and unhandled-exception paths both return a JSON',
-    'envelope with at minimum {error, message, status} — not the framework',
-    'default HTML page or a bare string.',
-    '"""',
+  const appModule = path.relative(projectPath, appAbs).replace(/\.py$/, '').replace(/\//g, '.');
+  const testBody = framework === 'fastapi'
+    ? renderFastApiErrorEnvelopeTest(appModule)
+    : renderFlaskErrorEnvelopeTest(appModule);
+  if (!fileExists(testPath) || ((await readTextSafe(testPath)) ?? '') !== testBody) {
+    await writeText(testPath, testBody);
+    changed.add('tests/test_error_envelope.py');
+  }
+  if (await ensureScript(projectPath, 'test', 'python3 -m pytest -q', true)) changed.add('package.json');
+  return {
+    summary: changed.size > 0
+      ? `wrote structured API error envelope (${framework} handlers + test_error_envelope.py)`
+      : 'API error envelope already configured',
+    changed_files: Array.from(changed),
+  };
+};
+
+function renderFlaskErrorEnvelopeTest(appModule: string): string {
+  return [
+    '"""Structured error-envelope contract test (Flask)."""',
     'import importlib',
     '',
     'import pytest',
@@ -3261,7 +3468,7 @@ const writeApiErrorEnvelope: Handler = async (projectPath) => {
     'def client(monkeypatch):',
     '    for env_key in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "DEEPSEEK_API_KEY"):',
     '        monkeypatch.setenv(env_key, f"test-{env_key.lower()}")',
-    '    import app as app_module',
+    `    app_module = importlib.import_module("${appModule}")`,
     '    importlib.reload(app_module)',
     '    app_module.app.config.update(TESTING=True, PROPAGATE_EXCEPTIONS=False)',
     '    return app_module.app.test_client()',
@@ -3282,8 +3489,7 @@ const writeApiErrorEnvelope: Handler = async (projectPath) => {
     '',
     '',
     'def test_unhandled_exception_returns_structured_envelope(client):',
-    '    # Register a transient throw route to drive the @app.errorhandler(Exception) path.',
-    '    import app as app_module',
+    `    import ${appModule} as app_module`,
     '',
     '    @app_module.app.route("/__d2p_canary_throw__")',
     '    def _canary():',
@@ -3297,18 +3503,212 @@ const writeApiErrorEnvelope: Handler = async (projectPath) => {
     '    assert body["status"] == 500',
     '',
   ].join('\n');
-  if (!fileExists(testPath) || ((await readTextSafe(testPath)) ?? '') !== testBody) {
-    await writeText(testPath, testBody);
-    changed.add('tests/test_error_envelope.py');
-  }
-  if (await ensureScript(projectPath, 'test', 'python3 -m pytest -q', true)) changed.add('package.json');
-  return {
-    summary: changed.size > 0
-      ? 'wrote structured API error envelope (Flask errorhandler + test_error_envelope.py)'
-      : 'API error envelope already configured',
-    changed_files: Array.from(changed),
-  };
-};
+}
+
+function renderFastApiErrorEnvelopeTest(appModule: string): string {
+  return [
+    '"""Structured error-envelope contract test (FastAPI)."""',
+    'import importlib',
+    '',
+    'import pytest',
+    'from fastapi.testclient import TestClient',
+    '',
+    '',
+    '@pytest.fixture()',
+    'def client(monkeypatch):',
+    '    for env_key in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "DEEPSEEK_API_KEY"):',
+    '        monkeypatch.setenv(env_key, f"test-{env_key.lower()}")',
+    `    app_module = importlib.import_module("${appModule}")`,
+    '    importlib.reload(app_module)',
+    '    return TestClient(app_module.app, raise_server_exceptions=False)',
+    '',
+    '',
+    'def _assert_envelope(body):',
+    '    assert isinstance(body, dict), f"expected JSON object envelope, got {type(body).__name__}"',
+    '    assert "error" in body, f"missing error key, got {body!r}"',
+    '    assert "message" in body, f"missing message key, got {body!r}"',
+    '    assert "status" in body, f"missing status key, got {body!r}"',
+    '',
+    '',
+    'def test_404_returns_structured_envelope(client):',
+    '    response = client.get("/this-route-does-not-exist-d2p-canary")',
+    '    assert response.status_code == 404, response.content',
+    '    body = response.json()',
+    '    _assert_envelope(body)',
+    '    assert body["status"] == 404',
+    '',
+    '',
+    'def test_unhandled_exception_returns_structured_envelope(client):',
+    `    import ${appModule} as app_module`,
+    '',
+    '    @app_module.app.get("/__d2p_canary_throw__")',
+    '    async def _canary():',
+    '        raise RuntimeError("canary failure")',
+    '',
+    '    response = client.get("/__d2p_canary_throw__")',
+    '    assert response.status_code == 500, response.content',
+    '    body = response.json()',
+    '    _assert_envelope(body)',
+    '    assert body["status"] == 500',
+    '',
+  ].join('\n');
+}
+
+function renderLlmStreamingModuleFastApi(layout: LlmChatLayout): string {
+  return [
+    '"""Streaming chat surface registered onto the host FastAPI app.',
+    '',
+    'register_streaming_route(app) adds a POST /chat/stream endpoint that calls',
+    'the LLM client with stream=True and yields each token chunk as an SSE',
+    '`data:` frame via fastapi.responses.StreamingResponse. The client is',
+    'resolved through the host app module so monkeypatching `app.' + layout.clientClassName + '`',
+    'in tests is enough to swap the implementation.',
+    '"""',
+    'from __future__ import annotations',
+    '',
+    'import importlib',
+    'import json',
+    'import os',
+    'from typing import AsyncIterator',
+    '',
+    'from fastapi import FastAPI, Request',
+    'from fastapi.responses import StreamingResponse',
+    '',
+    '',
+    `_HOST_MODULE = "${layout.appModule}"`,
+    '',
+    '',
+    'def register_streaming_route(app: FastAPI, *, route: str = "/chat/stream") -> None:',
+    '    @app.post(route)',
+    '    async def chat_stream(request: Request) -> StreamingResponse:',
+    '        body = await request.json()',
+    `        message = body.get("${layout.messageField}", "") if isinstance(body, dict) else ""`,
+    '        host = importlib.import_module(_HOST_MODULE)',
+    `        client_factory = getattr(host, "${layout.clientClassName}", None)`,
+    '        if client_factory is None:',
+    '            return StreamingResponse(',
+    '                _error_iterator({"error": "no_client", "message": "LLM client not available"}),',
+    '                media_type="text/event-stream",',
+    '                status_code=503,',
+    '            )',
+    '        client = client_factory(api_key=os.environ.get("OPENAI_API_KEY") or os.environ.get("ANTHROPIC_API_KEY") or "test-key")',
+    '',
+    '        async def _iter_chunks() -> AsyncIterator[str]:',
+    '            try:',
+    '                stream = client.chat.completions.create(',
+    '                    model=os.environ.get("WW_MODEL", "gpt-3.5-turbo"),',
+    '                    messages=[{"role": "user", "content": message}],',
+    '                    stream=True,',
+    '                )',
+    '            except Exception as exc:  # noqa: BLE001',
+    '                payload = json.dumps({"error": type(exc).__name__, "message": str(exc)[:200]})',
+    '                yield f"event: error\\ndata: {payload}\\n\\n"',
+    '                return',
+    '            try:',
+    '                for chunk in stream:',
+    '                    delta = _extract_delta(chunk)',
+    '                    if not delta:',
+    '                        continue',
+    '                    yield f"data: {json.dumps({\'delta\': delta})}\\n\\n"',
+    '                yield "data: [DONE]\\n\\n"',
+    '            except Exception as exc:  # noqa: BLE001',
+    '                payload = json.dumps({"error": type(exc).__name__, "message": str(exc)[:200]})',
+    '                yield f"event: error\\ndata: {payload}\\n\\n"',
+    '',
+    '        return StreamingResponse(_iter_chunks(), media_type="text/event-stream")',
+    '',
+    '',
+    'async def _error_iterator(payload: dict) -> AsyncIterator[str]:',
+    '    yield f"event: error\\ndata: {json.dumps(payload)}\\n\\n"',
+    '',
+    '',
+    'def _extract_delta(chunk: object) -> str:',
+    '    """Tolerant of OpenAI/Anthropic-shaped stream events and dict-shaped fakes."""',
+    '    if isinstance(chunk, dict):',
+    '        choices = chunk.get("choices") or []',
+    '        if choices and isinstance(choices[0], dict):',
+    '            delta = choices[0].get("delta") or choices[0].get("message") or {}',
+    '            return str(delta.get("content") or "")',
+    '        return str(chunk.get("content") or "")',
+    '    choices = getattr(chunk, "choices", None)',
+    '    if choices:',
+    '        delta = getattr(choices[0], "delta", None)',
+    '        if delta is not None:',
+    '            return str(getattr(delta, "content", "") or "")',
+    '    return str(getattr(chunk, "content", "") or "")',
+    '',
+  ].join('\n');
+}
+
+function renderLlmStreamingTestFastApi(layout: LlmChatLayout): string {
+  return [
+    '"""End-to-end streaming-surface contract test (FastAPI).',
+    '',
+    'Drives POST /chat/stream with a monkeypatched LLM client that yields',
+    'three fake chunks. Asserts the response is text/event-stream and that',
+    'the SSE body contains the expected `data:` frames plus the [DONE]',
+    'terminator.',
+    '"""',
+    'import importlib',
+    'import json',
+    '',
+    'import pytest',
+    'from fastapi.testclient import TestClient',
+    '',
+    'from streaming import register_streaming_route  # noqa: F401',
+    '',
+    '',
+    'class _FakeStreamChunk:',
+    '    def __init__(self, content):',
+    '        choice = type("C", (), {"delta": type("D", (), {"content": content})()})',
+    '        self.choices = [choice]',
+    '',
+    '',
+    'class _FakeStreamingCompletions:',
+    '    def create(self, **kwargs):',
+    '        assert kwargs.get("stream") is True, "streaming endpoint must request stream=True"',
+    '        return iter([_FakeStreamChunk("hel"), _FakeStreamChunk("lo "), _FakeStreamChunk("world")])',
+    '',
+    '',
+    'class _FakeStreamingChat:',
+    '    def __init__(self):',
+    '        self.completions = _FakeStreamingCompletions()',
+    '',
+    '',
+    'class _FakeStreamingClient:',
+    '    def __init__(self, **kwargs):',
+    '        self.chat = _FakeStreamingChat()',
+    '        self.messages = _FakeStreamingCompletions()',
+    '',
+    '',
+    '@pytest.fixture()',
+    'def stream_client(monkeypatch):',
+    '    for env_key in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "DEEPSEEK_API_KEY", "WW_MODEL"):',
+    '        monkeypatch.setenv(env_key, f"test-{env_key.lower()}")',
+    `    app_module = importlib.import_module("${layout.appModule}")`,
+    '    importlib.reload(app_module)',
+    `    if hasattr(app_module, "${layout.clientClassName}"):`,
+    `        monkeypatch.setattr(app_module, "${layout.clientClassName}", _FakeStreamingClient)`,
+    '    return TestClient(app_module.app)',
+    '',
+    '',
+    'def test_chat_stream_returns_event_stream(stream_client):',
+    `    response = stream_client.post("/chat/stream", json={"${layout.messageField}": "hi"})`,
+    '    assert response.status_code == 200, response.content',
+    '    content_type = response.headers.get("content-type", "")',
+    '    assert "text/event-stream" in content_type, (',
+    '        f"expected text/event-stream, got {content_type!r}"',
+    '    )',
+    '    body = response.text',
+    '    assert "data: " in body, f"missing SSE data frame, body={body[:200]!r}"',
+    '    assert "[DONE]" in body, f"missing [DONE] sentinel, body={body[:200]!r}"',
+    '    data_lines = [line for line in body.splitlines() if line.startswith("data: ") and line != "data: [DONE]"]',
+    '    assert data_lines, "no streamed chunks were emitted"',
+    '    parsed = json.loads(data_lines[0][len("data: "):])',
+    '    assert "delta" in parsed and parsed["delta"], f"first chunk lacks delta content: {data_lines[0]!r}"',
+    '',
+  ].join('\n');
+}
 
 const writeNotebookRuntimeExecutionTest: Handler = async (projectPath) => {
   const changed = new Set<string>();
@@ -4164,7 +4564,7 @@ function substituteNodePathArgs(route: string, args: Array<{ name: string; sampl
   return out;
 }
 
-async function detectPythonApiRuntimeLayout(projectPath: string): Promise<ApiRuntimeLayout | null> {
+export async function detectPythonApiRuntimeLayout(projectPath: string): Promise<ApiRuntimeLayout | null> {
   for (const rel of PYTHON_API_ENTRY_CANDIDATES) {
     const text = await readTextSafe(path.join(projectPath, rel));
     if (!text) continue;
@@ -4195,65 +4595,109 @@ async function detectPythonApiRuntimeLayout(projectPath: string): Promise<ApiRun
  * proxies through `from .services import llm_call` (with the SDK import
  * living in `services.py`) is still classified as externally-reaching.
  */
-async function aggregatePythonImportExternalSurface(
+export async function aggregatePythonImportExternalSurface(
   projectPath: string,
   entryRel: string,
   entryText: string,
 ): Promise<boolean> {
-  if (EXTERNAL_SERVICE_IMPORT_RE.test(entryText)) return true;
-  const entryDir = path.dirname(entryRel);
-  const importTargets = new Set<string>();
-  // Match `from .x import y` / `from .pkg.x import y` / `from x import y`
-  const fromImportRe = /^\s*from\s+(\.{1,2})?([\w][\w.]*)\s+import\s+/gm;
-  for (const m of entryText.matchAll(fromImportRe)) {
-    const dots = m[1] ?? '';
-    const dotted = m[2] ?? '';
-    if (!dotted) continue;
-    importTargets.add(`${dots}${dotted}`);
-  }
-  // Match `import x` / `import x.y`
-  const bareImportRe = /^\s*import\s+([\w][\w.]*)/gm;
-  for (const m of entryText.matchAll(bareImportRe)) {
-    const dotted = m[1] ?? '';
-    if (dotted) importTargets.add(dotted);
-  }
-  for (const target of importTargets) {
-    const candidates = resolvePythonImportToFiles(projectPath, entryDir, target);
-    for (const candidate of candidates) {
-      const text = await readTextSafe(candidate);
-      if (!text) continue;
-      if (EXTERNAL_SERVICE_IMPORT_RE.test(text)) return true;
-    }
-  }
-  return false;
+  return bfsImportSurface({
+    projectPath,
+    entryRel,
+    entryText,
+    externalRe: EXTERNAL_SERVICE_IMPORT_RE,
+    extractTargets: extractPythonImportTargets,
+    resolveCandidates: (target, entryDir) => resolvePythonImportToFiles(projectPath, entryDir, target),
+  });
 }
 
-/**
- * Node sibling of `aggregatePythonImportExternalSurface`. Walks depth-1
- * relative imports from the entry file and reports whether any sibling
- * pulls in an external SDK.
- */
 async function aggregateNodeImportExternalSurface(
   projectPath: string,
   entryRel: string,
   entryText: string,
 ): Promise<boolean> {
-  if (NODE_EXTERNAL_SERVICE_IMPORT_RE.test(entryText)) return true;
-  const entryDir = path.dirname(entryRel);
-  const targets = new Set<string>();
-  for (const m of entryText.matchAll(/(?:from\s+|require\s*\(\s*)['"](\.{1,2}\/[^'"]+|\.[^'"]+)['"]/g)) {
-    const spec = m[1];
-    if (spec) targets.add(spec);
-  }
-  for (const target of targets) {
-    const candidates = resolveNodeImportToFiles(projectPath, entryDir, target);
-    for (const candidate of candidates) {
-      const text = await readTextSafe(candidate);
-      if (!text) continue;
-      if (NODE_EXTERNAL_SERVICE_IMPORT_RE.test(text)) return true;
+  return bfsImportSurface({
+    projectPath,
+    entryRel,
+    entryText,
+    externalRe: NODE_EXTERNAL_SERVICE_IMPORT_RE,
+    extractTargets: extractNodeImportTargets,
+    resolveCandidates: (target, entryDir) => resolveNodeImportToFiles(projectPath, entryDir, target),
+  });
+}
+
+interface BfsImportSurfaceArgs {
+  projectPath: string;
+  entryRel: string;
+  entryText: string;
+  externalRe: RegExp;
+  extractTargets: (text: string) => string[];
+  resolveCandidates: (target: string, entryDir: string) => string[];
+}
+
+// BFS walks the transitive import graph from the entry file looking for any
+// module that imports an external-service SDK. Replaces the previous depth-1
+// walk so a handler that proxies through several layers of internal modules
+// (e.g. handler → router → service → adapter → openai) is still classified
+// as externally-reaching. Hard caps prevent runaway traversal on monorepos
+// with hundreds of files.
+const BFS_MAX_FILES = 200;
+const BFS_MAX_DEPTH = 6;
+
+async function bfsImportSurface(args: BfsImportSurfaceArgs): Promise<boolean> {
+  const { projectPath, entryRel, entryText, externalRe, extractTargets, resolveCandidates } = args;
+  if (externalRe.test(entryText)) return true;
+  const visited = new Set<string>();
+  const entryAbs = path.resolve(projectPath, entryRel);
+  visited.add(entryAbs);
+  type QueueItem = { absPath: string; text: string; depth: number };
+  const queue: QueueItem[] = [{ absPath: entryAbs, text: entryText, depth: 0 }];
+  while (queue.length > 0 && visited.size < BFS_MAX_FILES) {
+    const next = queue.shift()!;
+    if (next.depth >= BFS_MAX_DEPTH) continue;
+    const entryDir = path.relative(projectPath, path.dirname(next.absPath)) || '.';
+    const targets = extractTargets(next.text);
+    for (const target of targets) {
+      const candidates = resolveCandidates(target, entryDir);
+      for (const candidate of candidates) {
+        const absCandidate = path.resolve(candidate);
+        if (visited.has(absCandidate)) continue;
+        const text = await readTextSafe(absCandidate);
+        if (!text) continue;
+        visited.add(absCandidate);
+        if (externalRe.test(text)) return true;
+        queue.push({ absPath: absCandidate, text, depth: next.depth + 1 });
+        if (visited.size >= BFS_MAX_FILES) break;
+      }
+      if (visited.size >= BFS_MAX_FILES) break;
     }
   }
   return false;
+}
+
+function extractPythonImportTargets(text: string): string[] {
+  const out = new Set<string>();
+  // Match `from .x import y` / `from .pkg.x import y` / `from x import y`
+  for (const m of text.matchAll(/^\s*from\s+(\.{1,2})?([\w][\w.]*)\s+import\s+/gm)) {
+    const dots = m[1] ?? '';
+    const dotted = m[2] ?? '';
+    if (!dotted) continue;
+    out.add(`${dots}${dotted}`);
+  }
+  // Match `import x` / `import x.y`
+  for (const m of text.matchAll(/^\s*import\s+([\w][\w.]*)/gm)) {
+    const dotted = m[1] ?? '';
+    if (dotted) out.add(dotted);
+  }
+  return Array.from(out);
+}
+
+function extractNodeImportTargets(text: string): string[] {
+  const out = new Set<string>();
+  for (const m of text.matchAll(/(?:from\s+|require\s*\(\s*)['"](\.{1,2}\/[^'"]+|\.[^'"]+)['"]/g)) {
+    const spec = m[1];
+    if (spec) out.add(spec);
+  }
+  return Array.from(out);
 }
 
 function resolveNodeImportToFiles(projectPath: string, entryDir: string, target: string): string[] {
@@ -4365,6 +4809,14 @@ function parseApiRoutes(text: string, framework: 'flask' | 'fastapi', externalSu
     if (seen.has(key)) return;
     seen.add(key);
     const directExternal = EXTERNAL_SERVICE_RE.test(handlerSlice);
+    // KNOWN LIMITATION: when BFS finds an external SDK in a depth-2+ sibling
+    // module but the handler delegates via an opaque internal name (e.g.
+    // `await route_message(...)`), the shape-based regex below does NOT
+    // flag the route as externally-reaching. The fix is to track imported
+    // names from externally-reaching modules and check the handler body
+    // for any of them. Until that lands, prefer naming handler helpers
+    // with one of the recognised shapes (client.*.create, model.invoke, …)
+    // OR call the external SDK directly from the route handler.
     const indirectExternal = moduleImportsExternal && EXTERNAL_SERVICE_CALL_SHAPE_RE.test(handlerSlice);
     routes.push({
       method,
@@ -4586,9 +5038,13 @@ function renderApiRuntimeBehaviourTest(layout: ApiRuntimeLayout): string {
       `    yield module.${layout.appAttribute}.test_client()`,
     );
   } else {
+    // raise_server_exceptions=False lets handlers that legitimately raise
+    // (e.g. external-service routes hitting a stubbed 401) surface as
+    // 500 responses to the test rather than killing the whole pytest
+    // run. Mirrors the Flask PROPAGATE_EXCEPTIONS=False posture above.
     lines.push(
       '    from fastapi.testclient import TestClient',
-      `    with TestClient(module.${layout.appAttribute}) as test_client:`,
+      `    with TestClient(module.${layout.appAttribute}, raise_server_exceptions=False) as test_client:`,
       '        yield test_client',
     );
   }
@@ -4611,22 +5067,39 @@ function renderApiRuntimeBehaviourTest(layout: ApiRuntimeLayout): string {
     } else {
       lines.push(`    response = client.${route.method.toLowerCase()}("${concretePath}")`);
     }
-    // Route registration is checked via the app's url_map rather than by
-    // asserting `status_code != 404`, because handlers with path params
+    // Route registration is checked via the app's route table rather than
+    // by asserting `status_code != 404`, because handlers with path params
     // legitimately return 404 for unknown resources (e.g. `/stream/<id>`).
+    // Flask exposes routes via app.url_map.iter_rules(); FastAPI exposes
+    // them via app.routes (list of starlette Route objects).
     const ruleRepr = `${route.method} ${route.path}`;
-    lines.push(
-      '    registered_rules = {',
-      '        f"{method} {rule.rule}"',
-      '        for rule in client.application.url_map.iter_rules()',
-      '        for method in (rule.methods or set())',
-      '        if method not in {"HEAD", "OPTIONS"}',
-      '    }',
-      `    assert "${ruleRepr}" in registered_rules, (`,
-      `        "route ${ruleRepr} should be registered "`,
-      '        f"(saw: {sorted(registered_rules)})"',
-      '    )',
-    );
+    if (layout.framework === 'flask') {
+      lines.push(
+        '    registered_rules = {',
+        '        f"{method} {rule.rule}"',
+        '        for rule in client.application.url_map.iter_rules()',
+        '        for method in (rule.methods or set())',
+        '        if method not in {"HEAD", "OPTIONS"}',
+        '    }',
+        `    assert "${ruleRepr}" in registered_rules, (`,
+        `        "route ${ruleRepr} should be registered "`,
+        '        f"(saw: {sorted(registered_rules)})"',
+        '    )',
+      );
+    } else {
+      lines.push(
+        '    registered_rules = {',
+        '        f"{method} {getattr(route, \'path\', \'\')}"',
+        '        for route in client.app.routes',
+        '        for method in (getattr(route, "methods", None) or set())',
+        '        if method not in {"HEAD", "OPTIONS"}',
+        '    }',
+        `    assert "${ruleRepr}" in registered_rules, (`,
+        `        "route ${ruleRepr} should be registered "`,
+        '        f"(saw: {sorted(registered_rules)})"',
+        '    )',
+      );
+    }
     if (!route.callsExternalService) {
       lines.push(
         '    assert response.status_code < 500, (',

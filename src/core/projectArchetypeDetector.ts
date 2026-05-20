@@ -3,6 +3,12 @@ import type { ProjectSnapshot } from './types.js';
 import { readTextSafe, listFiles } from '../utils/fs.js';
 import { readJsonSafe } from '../utils/json.js';
 import { takeSnapshot } from './projectSnapshot.js';
+import {
+  loadDeclarativeArchetypes,
+  buildProbeContext,
+  evaluateDeclarativeProbe,
+  type DeclarativeArchetype,
+} from './archetypes/declarativeLoader.js';
 
 /**
  * ProjectArchetypeDetector (Phase 5) — identifies what kind of project this
@@ -231,32 +237,75 @@ export async function detectArchetype(projectPath: string): Promise<ArchetypeRep
   const pyproject = (await readTextSafe(path.join(projectPath, 'pyproject.toml'))) ?? '';
 
   const ctx: SignalContext = { files, has, pkg, pyproject, snapshot };
+  const declarativeCtx = await buildProbeContext(projectPath, files, pkg, snapshot);
+  const declarative: DeclarativeArchetype[] = await loadDeclarativeArchetypes(projectPath);
+  const declarativeIds = new Set(declarative.map((d) => d.id));
 
-  const scores: { id: ArchetypeId; raw: number; max: number; signals: string[]; missing: string[] }[] = [];
+  interface ScoreEntry {
+    id: string;
+    raw: number;
+    max: number;
+    signals: string[];
+    missing: string[];
+    recommended: string;
+    patterns: string[];
+    risk: 'low' | 'medium' | 'high';
+    threshold: number;
+  }
+  const scores: ScoreEntry[] = [];
   for (const [id, probe] of Object.entries(PROBES) as [ArchetypeId, Probe][]) {
     if (id === 'unknown') continue;
+    if (declarativeIds.has(id)) continue; // JSON override wins for built-in ids.
     const probes = probe(ctx);
     const max = probes.reduce((a, p) => a + Math.max(0, p.weight), 0);
     const raw = probes.reduce((a, p) => a + (p.hit ? p.weight : 0), 0);
     const signals = probes.filter((p) => p.hit && p.weight > 0).map((p) => p.signal);
     const missing = probes.filter((p) => !p.hit && p.weight > 0).map((p) => p.signal);
-    scores.push({ id, raw, max, signals, missing });
+    scores.push({
+      id,
+      raw,
+      max,
+      signals,
+      missing,
+      recommended: RECOMMENDED_STANDARD[id],
+      patterns: APPLICABLE_PATTERNS[id],
+      risk: RISK_PROFILE[id],
+      threshold: 0.35,
+    });
+  }
+  for (const arche of declarative) {
+    const probes = evaluateDeclarativeProbe(arche, declarativeCtx);
+    const max = probes.reduce((a, p) => a + Math.max(0, p.weight), 0);
+    const raw = probes.reduce((a, p) => a + (p.hit ? p.weight : 0), 0);
+    const signals = probes.filter((p) => p.hit && p.weight > 0).map((p) => p.signal);
+    const missing = probes.filter((p) => !p.hit && p.weight > 0).map((p) => p.signal);
+    scores.push({
+      id: arche.id,
+      raw,
+      max,
+      signals,
+      missing,
+      recommended: arche.recommended_standard,
+      patterns: arche.applicable_qa_patterns,
+      risk: arche.risk_profile,
+      threshold: arche.threshold ?? 0.35,
+    });
   }
   scores.sort((a, b) => b.raw / Math.max(1, b.max) - a.raw / Math.max(1, a.max));
 
   const top = scores[0]!;
   const confidence = top.max === 0 ? 0 : Math.max(0, Math.min(1, top.raw / top.max));
-  const isUnknown = confidence < 0.35;
+  const isUnknown = confidence < top.threshold;
 
-  const toArchetype = (s: typeof top, conf?: number): ProjectArchetype => ({
-    id: s.id,
+  const toArchetype = (s: ScoreEntry, conf?: number): ProjectArchetype => ({
+    id: s.id as ArchetypeId,
     name: s.id,
     confidence: conf ?? Math.max(0, Math.min(1, s.raw / Math.max(1, s.max))),
     detected_signals: s.signals,
     missing_signals: s.missing,
-    recommended_standard: RECOMMENDED_STANDARD[s.id],
-    applicable_qa_patterns: APPLICABLE_PATTERNS[s.id],
-    risk_profile: RISK_PROFILE[s.id],
+    recommended_standard: s.recommended,
+    applicable_qa_patterns: s.patterns,
+    risk_profile: s.risk,
   });
 
   const primary: ProjectArchetype = isUnknown

@@ -2768,6 +2768,129 @@ describe('gapAnalyzer', () => {
     expect(gap.findings.map((f) => f.category)).not.toContain('missing_api_error_envelope');
   });
 
+  it('BFS-traces external SDK imports through multi-hop internal modules', async () => {
+    // app.py → services/router.py → services/llm.py → openai
+    // The previous depth-1 walker missed cases like this; the BFS walker
+    // visits the transitive closure of relative imports until it finds
+    // an external-service SDK or runs out of files (cap: 200 files,
+    // depth 6).
+    //
+    // NOTE: this test verifies the BFS surface-detection function in
+    // isolation. Propagating that signal into a specific route's
+    // `callsExternalService` flag requires also tracking which imported
+    // *names* came from externally-reaching modules — see the
+    // limitation comment in `parseApiRoutes`. For now BFS proves the
+    // module-level signal is correct; per-route propagation through
+    // intermediate function calls is a follow-up.
+    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-bfs-multi-hop-'));
+    await fs.mkdir(path.join(dir, 'services'), { recursive: true });
+    await fs.writeFile(
+      path.join(dir, 'app.py'),
+      [
+        'from fastapi import FastAPI',
+        'from services.router import route_message',
+        '',
+        'app = FastAPI()',
+        '',
+        '@app.post("/chat")',
+        'async def chat(body: dict):',
+        '    return {"reply": await route_message(body.get("message", ""))}',
+        '',
+      ].join('\n'),
+    );
+    await fs.writeFile(path.join(dir, 'services', '__init__.py'), '');
+    await fs.writeFile(
+      path.join(dir, 'services', 'router.py'),
+      'from services.llm import call_llm\nasync def route_message(m): return await call_llm(m)\n',
+    );
+    await fs.writeFile(
+      path.join(dir, 'services', 'llm.py'),
+      'import openai\nasync def call_llm(m): return openai.OpenAI().chat.completions.create(model="x", messages=[]).choices[0].message.content\n',
+    );
+    const { aggregatePythonImportExternalSurface } = await import('../src/agents/providers/RuleBasedExecutor.js') as any;
+    const entryText = await fs.readFile(path.join(dir, 'app.py'), 'utf8');
+    const reachesExternal = await aggregatePythonImportExternalSurface(dir, 'app.py', entryText);
+    expect(reachesExternal).toBe(true);
+  });
+
+  it('declarative archetype loader detects Rust axum via JSON probes', async () => {
+    const { detectArchetype } = await import('../src/core/projectArchetypeDetector.js') as any;
+    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-arche-rust-'));
+    await fs.mkdir(path.join(dir, 'src'), { recursive: true });
+    await fs.writeFile(
+      path.join(dir, 'Cargo.toml'),
+      '[package]\nname = "demo"\nversion = "0.1.0"\n\n[dependencies]\naxum = "0.7"\ntokio = "1"\n',
+    );
+    await fs.writeFile(path.join(dir, 'src', 'main.rs'), 'fn main() {}\n');
+    const report = await detectArchetype(dir);
+    expect(report.primary.id).toBe('rust-axum');
+    expect(report.primary.detected_signals).toContain('dep:axum');
+  });
+
+  it('declarative archetype loader detects Go web servers via go.mod', async () => {
+    const { detectArchetype } = await import('../src/core/projectArchetypeDetector.js') as any;
+    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-arche-go-'));
+    await fs.writeFile(
+      path.join(dir, 'go.mod'),
+      'module demo\n\ngo 1.21\n\nrequire github.com/gin-gonic/gin v1.9.0\n',
+    );
+    await fs.writeFile(path.join(dir, 'main.go'), 'package main\nfunc main() {}\n');
+    const report = await detectArchetype(dir);
+    expect(report.primary.id).toBe('go-web');
+  });
+
+  it('declarative archetype loader detects Rails via Gemfile + app/controllers', async () => {
+    const { detectArchetype } = await import('../src/core/projectArchetypeDetector.js') as any;
+    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-arche-rails-'));
+    await fs.mkdir(path.join(dir, 'app', 'controllers'), { recursive: true });
+    await fs.mkdir(path.join(dir, 'config'), { recursive: true });
+    await fs.writeFile(path.join(dir, 'Gemfile'), 'source "https://rubygems.org"\ngem "rails", "~> 7.1"\n');
+    await fs.writeFile(path.join(dir, 'config.ru'), 'run Rails.application\n');
+    await fs.writeFile(path.join(dir, 'config', 'routes.rb'), 'Rails.application.routes.draw do\nend\n');
+    await fs.writeFile(path.join(dir, 'app', 'controllers', 'application_controller.rb'), 'class ApplicationController < ActionController::Base\nend\n');
+    const report = await detectArchetype(dir);
+    expect(report.primary.id).toBe('rails-app');
+  });
+
+  it('per-project override JSON wins over the built-in archetype with the same id', async () => {
+    const { detectArchetype } = await import('../src/core/projectArchetypeDetector.js') as any;
+    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-arche-override-'));
+    await fs.mkdir(path.join(dir, '.demo2project', 'archetypes'), { recursive: true });
+    // Drop a per-project archetype that wins on a Cargo.toml signal alone.
+    await fs.writeFile(
+      path.join(dir, '.demo2project', 'archetypes', 'my-custom.json'),
+      JSON.stringify({
+        id: 'my-custom-rust-cli',
+        name: 'My custom Rust CLI',
+        recommended_standard: 'rust-cli',
+        applicable_qa_patterns: [],
+        risk_profile: 'low',
+        threshold: 0.3,
+        signals: [
+          { type: 'file_exists', path: 'Cargo.toml', weight: 3, label: 'Cargo.toml' },
+          { type: 'cargo_dep', dep: 'clap', weight: 4, label: 'dep:clap' },
+          { type: 'lang_equals', value: 'rust', weight: 2, label: 'rust' },
+        ],
+      }),
+    );
+    await fs.mkdir(path.join(dir, 'src'), { recursive: true });
+    await fs.writeFile(path.join(dir, 'Cargo.toml'), '[dependencies]\nclap = "4"\n');
+    await fs.writeFile(path.join(dir, 'src', 'main.rs'), 'fn main() {}\n');
+    const report = await detectArchetype(dir);
+    expect(report.primary.id).toBe('my-custom-rust-cli');
+  });
+
+  it('BFS returns false for a closed import graph with no external SDK', async () => {
+    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-bfs-no-external-'));
+    await fs.mkdir(path.join(dir, 'services'), { recursive: true });
+    await fs.writeFile(path.join(dir, 'app.py'), 'from services.router import route\n');
+    await fs.writeFile(path.join(dir, 'services', '__init__.py'), '');
+    await fs.writeFile(path.join(dir, 'services', 'router.py'), 'def route(): return "ok"\n');
+    const { aggregatePythonImportExternalSurface } = await import('../src/agents/providers/RuleBasedExecutor.js') as any;
+    const reachesExternal = await aggregatePythonImportExternalSurface(dir, 'app.py', 'from services.router import route\n');
+    expect(reachesExternal).toBe(false);
+  });
+
   it('suppresses LLM chat-style findings for an LLM-backed simulation server that has no chat route', async () => {
     // Servers that use the LLM as an internal agent (e.g. background game loops)
     // legitimately have no /chat-style HTTP surface. The four chat gates should

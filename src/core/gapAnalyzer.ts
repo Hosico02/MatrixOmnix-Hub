@@ -990,70 +990,9 @@ export async function analyzeGaps(
         ),
       );
     }
-    // LLM chat full suite: surface a productized LLM app needs more than just
-    // provider config — eval harness, provider failure fallback, token budget
-    // enforcement, prompt template registry are all distinct gates that
-    // separate a demo from a product.
-    if (isLlmChatDemo(pkg, llmSurfaceText) && !(await hasLlmPromptEvalHarness(snapshot.project_path, files))) {
-      findings.push(
-        finding(
-          'missing_llm_prompt_eval_harness',
-          'high',
-          'LLM chat demo has no prompt evaluation harness',
-          'Productized LLM apps must pin prompt behaviour against a fixed set of golden cases so model swaps and prompt edits do not silently regress. The current project ships an LLM-backed handler with no `tests/prompts/*.json` fixtures and no harness that runs them through the chat endpoint with a mocked provider.',
-          'Add tests/prompts/*.json golden cases (input messages + expected response shape) and tests/test_prompt_eval.py that iterates each case, drives /chat with the input through a mocked OpenAI/Anthropic client, and asserts the response shape and required keys.',
-          ['tests/test_prompt_eval.py', 'tests/prompts/'],
-        ),
-      );
-    }
-    if (isLlmChatDemo(pkg, llmSurfaceText) && !(await hasLlmProviderFailureFallback(snapshot.project_path, files))) {
-      findings.push(
-        finding(
-          'missing_llm_provider_failure_fallback',
-          'high',
-          'LLM chat handler has no provider-failure fallback test',
-          'A productized LLM chat handler must degrade gracefully when the upstream provider returns 5xx, rate-limits, or times out — not crash with a 500. No test in the current project patches the provider client to raise and asserts the handler returns a graceful 5xx/4xx status with a structured error body.',
-          'Add tests/test_provider_fallback.py that monkeypatches the LLM client class (e.g. `app.OpenAI`) so its create() call raises an APIError/TimeoutError, drives /chat, and asserts the handler returns 502/503/429 with a structured error payload — not 500. Drives the handler implementation toward wrapping the provider call in try/except.',
-          ['tests/test_provider_fallback.py', 'app.py'],
-        ),
-      );
-    }
-    if (isLlmChatDemo(pkg, llmSurfaceText) && !(await hasLlmTokenBudgetEnforcement(snapshot.project_path, files))) {
-      findings.push(
-        finding(
-          'missing_llm_token_budget_enforcement',
-          'medium',
-          'LLM chat handler has no token / input-size budget enforcement',
-          'A productized LLM chat handler must reject inputs that exceed its token budget before they reach the provider — otherwise a single oversized request can blow through cost, latency and provider error quotas. The current project has neither an explicit `max_message_length` / `tiktoken` guard in source nor a test that sends an oversized message and asserts a 400/413/422 response.',
-          'Either add a request-size guard in the chat handler (max char/token check) and a test that exercises it, OR add tests/test_token_budget.py that POSTs a message exceeding 50K characters and asserts the handler returns 400/413/422 (not 500 or a successful provider call).',
-          ['tests/test_token_budget.py', 'app.py'],
-        ),
-      );
-    }
-    if (isLlmChatDemo(pkg, llmSurfaceText) && !(await hasLlmStreamingResponse(snapshot.project_path, files))) {
-      findings.push(
-        finding(
-          'missing_llm_streaming_response',
-          'medium',
-          'LLM chat demo has no streaming response surface',
-          'Productized LLM chat handlers should stream tokens back to the client (SSE / chunked transfer) — synchronous-only responses block the UI for the entire generation, hide errors until completion, and prevent cancellation. The current project has no route that returns text/event-stream and no chat completion call with stream=True.',
-          'Add a streaming endpoint (e.g. POST /chat/stream) that calls the LLM with stream=True and yields each chunk via Server-Sent Events. Add tests/test_streaming.py that drives the endpoint with a mocked streaming client and asserts the text/event-stream content type plus the `data:` framing.',
-          ['streaming.py', 'tests/test_streaming.py', 'app.py'],
-        ),
-      );
-    }
-    if (isLlmChatDemo(pkg, llmSurfaceText) && !(await hasLlmPromptTemplateRegistry(snapshot.project_path, files))) {
-      findings.push(
-        finding(
-          'missing_llm_prompt_template_registry',
-          'medium',
-          'LLM chat demo has no prompt template registry',
-          'Productized LLM apps version their prompts. Inline prompt strings inside handler functions cannot be reviewed, A/B tested, swapped per model, or rolled back independently of code. The current project has no `prompts/` directory of template files and no `prompts.py` registry module that the handler imports.',
-          'Extract inline system/user prompts into prompts/*.txt (or prompts.py module) and have the handler load them by name. Add at least one template + a unit test that asserts the registry exposes the named template.',
-          ['prompts/', 'prompts.py', 'tests/test_prompt_registry.py'],
-        ),
-      );
-    }
+    // LLM chat full suite has been hoisted OUT of the isFlaskApp guard so it
+    // applies to FastAPI chat surfaces too. See the block right after this
+    // isFlaskApp closing brace.
     if (hasBrokenLlmProviderSelectContract(templateText, llmConfigText)) {
       findings.push(
         finding(
@@ -1103,6 +1042,69 @@ export async function analyzeGaps(
         ),
       );
     }
+  }
+  // LLM chat full suite — framework-agnostic (Flask and FastAPI both
+  // satisfy `hasLlmChatStyleRoute`). Lives outside the isFlaskApp block.
+  const llmAgnosticSurfaceText = `${appPy}\n${configText}\n${playerText}\n${gameText}\n${templateText}\n${requirementsText}\n${pyprojectText}`;
+  if (isLlmChatDemo(pkg, llmAgnosticSurfaceText) && !(await hasLlmPromptEvalHarness(snapshot.project_path, files))) {
+    findings.push(
+      finding(
+        'missing_llm_prompt_eval_harness',
+        'high',
+        'LLM chat demo has no prompt evaluation harness',
+        'Productized LLM apps must pin prompt behaviour against a fixed set of golden cases so model swaps and prompt edits do not silently regress. The current project ships an LLM-backed handler with no `tests/prompts/*.json` fixtures and no harness that runs them through the chat endpoint with a mocked provider.',
+        'Add tests/prompts/*.json golden cases (input messages + expected response shape) and tests/test_prompt_eval.py that iterates each case, drives /chat with the input through a mocked OpenAI/Anthropic client, and asserts the response shape and required keys.',
+        ['tests/test_prompt_eval.py', 'tests/prompts/'],
+      ),
+    );
+  }
+  if (isLlmChatDemo(pkg, llmAgnosticSurfaceText) && !(await hasLlmProviderFailureFallback(snapshot.project_path, files))) {
+    findings.push(
+      finding(
+        'missing_llm_provider_failure_fallback',
+        'high',
+        'LLM chat handler has no provider-failure fallback test',
+        'A productized LLM chat handler must degrade gracefully when the upstream provider returns 5xx, rate-limits, or times out — not crash with a 500. No test in the current project patches the provider client to raise and asserts the handler returns a graceful 5xx/4xx status with a structured error body.',
+        'Add tests/test_provider_fallback.py that monkeypatches the LLM client class (e.g. `app.OpenAI`) so its create() call raises an APIError/TimeoutError, drives /chat, and asserts the handler returns 502/503/429 with a structured error payload — not 500. Drives the handler implementation toward wrapping the provider call in try/except.',
+        ['tests/test_provider_fallback.py', 'app.py'],
+      ),
+    );
+  }
+  if (isLlmChatDemo(pkg, llmAgnosticSurfaceText) && !(await hasLlmTokenBudgetEnforcement(snapshot.project_path, files))) {
+    findings.push(
+      finding(
+        'missing_llm_token_budget_enforcement',
+        'medium',
+        'LLM chat handler has no token / input-size budget enforcement',
+        'A productized LLM chat handler must reject inputs that exceed its token budget before they reach the provider — otherwise a single oversized request can blow through cost, latency and provider error quotas. The current project has neither an explicit `max_message_length` / `tiktoken` guard in source nor a test that sends an oversized message and asserts a 400/413/422 response.',
+        'Either add a request-size guard in the chat handler (max char/token check) and a test that exercises it, OR add tests/test_token_budget.py that POSTs a message exceeding 50K characters and asserts the handler returns 400/413/422 (not 500 or a successful provider call).',
+        ['tests/test_token_budget.py', 'app.py'],
+      ),
+    );
+  }
+  if (isLlmChatDemo(pkg, llmAgnosticSurfaceText) && !(await hasLlmStreamingResponse(snapshot.project_path, files))) {
+    findings.push(
+      finding(
+        'missing_llm_streaming_response',
+        'medium',
+        'LLM chat demo has no streaming response surface',
+        'Productized LLM chat handlers should stream tokens back to the client (SSE / chunked transfer) — synchronous-only responses block the UI for the entire generation, hide errors until completion, and prevent cancellation. The current project has no route that returns text/event-stream and no chat completion call with stream=True.',
+        'Add a streaming endpoint (e.g. POST /chat/stream) that calls the LLM with stream=True and yields each chunk via Server-Sent Events. Add tests/test_streaming.py that drives the endpoint with a mocked streaming client and asserts the text/event-stream content type plus the `data:` framing.',
+        ['streaming.py', 'tests/test_streaming.py', 'app.py'],
+      ),
+    );
+  }
+  if (isLlmChatDemo(pkg, llmAgnosticSurfaceText) && !(await hasLlmPromptTemplateRegistry(snapshot.project_path, files))) {
+    findings.push(
+      finding(
+        'missing_llm_prompt_template_registry',
+        'medium',
+        'LLM chat demo has no prompt template registry',
+        'Productized LLM apps version their prompts. Inline prompt strings inside handler functions cannot be reviewed, A/B tested, swapped per model, or rolled back independently of code. The current project has no `prompts/` directory of template files and no `prompts.py` registry module that the handler imports.',
+        'Extract inline system/user prompts into prompts/*.txt (or prompts.py module) and have the handler load them by name. Add at least one template + a unit test that asserts the registry exposes the named template.',
+        ['prompts/', 'prompts.py', 'tests/test_prompt_registry.py'],
+      ),
+    );
   }
   const hasNonWebProductSurface = deliverySurfaceIds.some((surface) => [
     'game_demo',
@@ -1656,7 +1658,11 @@ function hasLlmChatStyleRoute(sourceText: string): boolean {
   const routeRe = /@(?:app|router|api|bp|blueprint)\.(?:post|route)\s*\([^)]*\)\s*\n\s*(?:async\s+)?def\s+\w+\s*\([^)]*\)\s*:\s*([\s\S]*?)(?=\n@(?:app|router|api|bp|blueprint)\.|\nif\s+__name__|$)/g;
   const chatCallRe = /(?:client|llm|openai_client|anthropic_client)\.(?:chat\.completions|messages|completions)\.create\s*\(|\bchat\.completions\.create\s*\(/;
   const readsMessageRe = /\b(?:body|payload|data|request_json|json_data)\.get\(\s*['"](?:message|prompt|query|input|text|content|question)['"]/;
-  const returnsCompletionRe = /\breturn\s+(?:jsonify\s*\(|Response\s*\()[\s\S]{0,400}?(?:choices\[0\]|message\.content|\bcontent\b|response|reply|\bcompletion\b)/;
+  // Accept Flask jsonify(), Flask Response(), FastAPI Response/JSONResponse,
+  // FastAPI plain dict returns ({"reply": ...}), and FastAPI return models
+  // (return ChatResponse(...)). Anything whose return shape mentions the
+  // completion result (choices/message.content/reply/etc) counts.
+  const returnsCompletionRe = /\breturn\s+(?:jsonify\s*\(|Response\s*\(|JSONResponse\s*\(|\{|[A-Z]\w*\s*\()[\s\S]{0,400}?(?:choices\[0\]|message\.content|\bcontent\b|response|reply|\bcompletion\b)/;
   let m: RegExpExecArray | null;
   while ((m = routeRe.exec(sourceText)) !== null) {
     const handlerBody = m[1] ?? '';
