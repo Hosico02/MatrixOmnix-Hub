@@ -19,7 +19,10 @@ describe('MatrixOmnix site', () => {
     expect(app).toContain('currently in beta');
     expect(app).toContain('data-service-guide');
     expect(app).toContain('Beta workflow');
-    expect(app).toContain('pnpm matrixomnix analyze --project ./demo');
+    // Path-agnostic: the Service guide shows the analyze command with some
+    // placeholder demo path (./demo, ./your-demo, etc.) — the contract is the
+    // command shape, not the exact placeholder.
+    expect(app).toMatch(/pnpm matrixomnix analyze --project \.\/[\w-]+/);
     expect(app).toContain('v-if="page === \'home\'" class="cursor-capture"');
     expect(app).toContain('v-if="page === \'home\'" class="cursor-core"');
     expect(app).not.toContain('data-return-format="zip"');

@@ -143,29 +143,35 @@
 
       <section v-else-if="page === 'service'" class="content-page service-page" id="service">
         <PageHeading kicker="Service" title="How to use MatrixOmnix beta.">
-          MatrixOmnix is not a hosted file-processing service yet. Use the beta locally from the CLI, review every verification report, and keep productization changes under source control.
+          MatrixOmnix is not a hosted file-processing service yet. Use the beta locally from the CLI, review every verification report, and keep productization changes under source control. The default zero-cost path uses the deterministic <code>rule-based</code> executor and never calls a paid model; LLM providers are opt-in via <code>--provider</code> and <code>--web</code>.
         </PageHeading>
 
         <section class="service-layout" data-service-guide>
           <article class="usage-card">
             <h2>Beta workflow</h2>
             <p>
-              Install the repo, point MatrixOmnix at a demo project, run analysis and gap checks, then let controlled iterations make scoped improvements with verification evidence. For LLM or agent demos, enable web research and advisory agents so MatrixOmnix can classify the product premise, compare source-cited market expectations and avoid forcing unrelated features into the project.
+              Install once, run the onboarding wizard, then drive read-only <code>analyze</code> and <code>gap</code> against your demo before you let <code>iterate</code> write anything. The default <code>--provider rule-based</code> path is fully deterministic, requires no API key, and is the one validated by the 15/15 stress suite. Add <code>--provider minimax</code> (requires <code>MINIMAX_API_KEY</code>) plus <code>--web --advisory-agents</code> only when you want model-backed critics and source-cited market research layered on top.
             </p>
             <code>pnpm install && pnpm build</code>
             <code>pnpm matrixomnix doctor</code>
-            <code>pnpm matrixomnix analyze --project ./demo</code>
+            <code>pnpm matrixomnix init --interactive</code>
+            <code>pnpm matrixomnix quickstart --use-example</code>
           </article>
 
           <ol class="usage-steps">
-            <li><strong>Analyze</strong><span>Detect runtime, dependencies, entrypoints, UI/API/CLI/data/worker surfaces, secrets risk and missing project contracts.</span></li>
-            <li><strong>Plan</strong><span>Convert gaps into scoped work with acceptance checks, fallback paths and evidence requirements; broad deterministic backlogs can be batched more aggressively.</span></li>
-            <li><strong>Iterate</strong><span>Run one or more controlled executor rounds, then inspect generated reports before trusting the result. Each productized surface ships gates in three tiers — structural, behavioural and productization — so passing tests at one tier does not let the project skip the next.</span></li>
-            <li><strong>Verify</strong><span>Run <code>matrixomnix gap --project ./demo</code>; by default it executes detected tests/builds and caps the score when evidence is red. Generated harnesses include API runtime + error envelope, config + worker runtime (Python and Node), and the full LLM chat productization suite when a real <code>/chat</code>-style route is detected.</span></li>
+            <li><strong>Doctor + Init</strong><span>Run <code>pnpm matrixomnix doctor</code> to confirm Node, pnpm and (optional) Claude/MiniMax detection; then <code>pnpm matrixomnix init --interactive</code> picks a profile (conservative / balanced / autonomous) and writes <code>config/demo2project.json</code>.</span></li>
+            <li><strong>Analyze</strong><span>Run <code>pnpm matrixomnix analyze --project ./your-demo</code> (read-only). Detects runtime, dependencies, entrypoints, UI/API/CLI/data/worker surfaces, secrets risk and missing project contracts.</span></li>
+            <li><strong>Gap</strong><span>Run <code>pnpm matrixomnix gap --project ./your-demo</code>. Evidence-weighted by default — actually executes detected tests and builds, then caps the score when evidence is red. Add <code>--fast</code> for a static-only scan when you only want the finding list.</span></li>
+            <li><strong>Iterate</strong><span>Run <code>pnpm matrixomnix iterate --project ./your-demo --provider rule-based --max-iterations 1</code> for a deterministic round. Each productized surface ships gates in three tiers — structural, behavioural and productization — so passing tests at one tier does not let the project skip the next.</span></li>
+            <li><strong>Verify + report</strong><span>Re-run <code>pnpm matrixomnix gap --project ./your-demo</code> and then <code>pnpm matrixomnix report:project --project ./your-demo</code> for a Markdown+JSON summary. Generated harnesses include API runtime + error envelope, config + worker runtime (Python and Node), and the full LLM chat productization suite when a real <code>/chat</code>-style route is detected.</span></li>
           </ol>
         </section>
 
-        <code class="command-strip">matrixomnix iterate --project ./demo --provider minimax --web --advisory-agents --max-iterations 4</code>
+        <code class="command-strip">pnpm matrixomnix iterate --project ./your-demo --provider rule-based --max-iterations 1</code>
+        <p class="service-footnote">
+          Opt-in model-backed path (requires <code>MINIMAX_API_KEY</code> and network):
+          <code>pnpm matrixomnix iterate --project ./your-demo --provider minimax --web --advisory-agents --max-iterations 4</code>
+        </p>
       </section>
 
       <section v-else class="content-page contact-page" id="contact">
