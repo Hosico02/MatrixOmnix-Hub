@@ -21,11 +21,21 @@ for (const rel of [
   'src/main.js',
   'src/App.vue',
   'src/style.css',
-  'src/assets/framework-loop.svg',
-  'src/assets/harness-map.svg',
-  'src/assets/deployment-flow.svg',
 ]) {
   record(`exists:${rel}`, existsSync(path.join(site, rel)), `${rel} exists`);
+}
+
+// Diagram assets: either the SVG source or a rendered PNG is acceptable —
+// App.vue references the PNG variants, and PNGs are the canonical source
+// when authored externally (e.g. via an image-gen tool) rather than hand-
+// written SVG.
+for (const stem of ['framework-loop', 'harness-map', 'deployment-flow']) {
+  const candidates = ['svg', 'png', 'webp', 'jpg'].map((ext) => path.join(site, 'src', 'assets', `${stem}.${ext}`));
+  record(
+    `exists:src/assets/${stem}.{svg|png|webp|jpg}`,
+    candidates.some((p) => existsSync(p)),
+    `src/assets/${stem}.{svg|png|webp|jpg} — at least one variant exists`,
+  );
 }
 
 const pkg = existsSync(path.join(site, 'package.json')) ? JSON.parse(read('package.json')) : {};
