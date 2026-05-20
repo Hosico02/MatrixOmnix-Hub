@@ -1,123 +1,28 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900" role="img" aria-label="MatrixOmnix harness coverage map: 15 product surfaces auto-detected, each gated across three honest tiers — structural contract, behavioural runtime, and productization surface.">
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900" role="img" aria-label="MatrixOmnix harness coverage map">
   <rect width="1200" height="900" fill="#fff"/>
   <rect x="72" y="74" width="1056" height="752" fill="#111"/>
-
-  <text x="112" y="146" font-family="Inter,Arial" font-size="48" font-weight="900" fill="#fff">Harness Map</text>
-  <text x="112" y="174" font-family="Inter,Arial" font-size="16" font-weight="500" fill="#fff" opacity="0.7">15 product surfaces auto-detected · each surface gated across three honest tiers of depth</text>
-
-  <!-- Web group label -->
-  <text x="112" y="232" font-family="Inter,Arial" font-size="14" font-weight="700" fill="#fff" opacity="0.6" letter-spacing="2">WEB &amp; CLIENT</text>
-
-  <!-- Row 1: Web / Client surfaces -->
-  <g font-family="Inter,Arial" font-size="20" font-weight="800">
+  <text x="112" y="150" font-family="Inter,Arial" font-size="58" font-weight="900" fill="#fff">Harness Map</text>
+  <g font-family="Inter,Arial" font-size="34" font-weight="800">
     <g fill="#fff">
-      <rect x="112" y="248" width="200" height="86"/>
-      <rect x="324" y="248" width="200" height="86"/>
-      <rect x="536" y="248" width="200" height="86"/>
-      <rect x="748" y="248" width="200" height="86"/>
-      <rect x="960" y="248" width="128" height="86"/>
+      <rect x="112" y="224" width="284" height="116"/>
+      <rect x="458" y="224" width="284" height="116"/>
+      <rect x="804" y="224" width="284" height="116"/>
+      <rect x="112" y="414" width="284" height="116"/>
+      <rect x="458" y="414" width="284" height="116"/>
+      <rect x="804" y="414" width="284" height="116"/>
+      <rect x="112" y="604" width="976" height="116"/>
     </g>
     <g fill="#111">
-      <text x="212" y="288" text-anchor="middle">SPA UI</text>
-      <text x="212" y="312" text-anchor="middle" font-size="12" font-weight="500" opacity="0.6">React · Vue · Next</text>
-      <text x="424" y="288" text-anchor="middle">SSR UI</text>
-      <text x="424" y="312" text-anchor="middle" font-size="12" font-weight="500" opacity="0.6">Flask · Django · ERB</text>
-      <text x="636" y="288" text-anchor="middle">Browser Ext</text>
-      <text x="636" y="312" text-anchor="middle" font-size="12" font-weight="500" opacity="0.6">manifest · popup</text>
-      <text x="848" y="288" text-anchor="middle">Notebook</text>
-      <text x="848" y="312" text-anchor="middle" font-size="12" font-weight="500" opacity="0.6">.ipynb · repro</text>
-      <text x="1024" y="296" text-anchor="middle">CLI</text>
+      <text x="254" y="294" text-anchor="middle">UI</text>
+      <text x="600" y="294" text-anchor="middle">CLI</text>
+      <text x="946" y="294" text-anchor="middle">API</text>
+      <text x="254" y="484" text-anchor="middle">Config</text>
+      <text x="600" y="484" text-anchor="middle">Data</text>
+      <text x="946" y="484" text-anchor="middle">Worker</text>
+      <text x="600" y="674" text-anchor="middle">Single-file Intake + Runtime Contract</text>
     </g>
   </g>
-
-  <!-- Services group label -->
-  <text x="112" y="376" font-family="Inter,Arial" font-size="14" font-weight="700" fill="#fff" opacity="0.6" letter-spacing="2">SERVICES &amp; DATA</text>
-
-  <!-- Row 2: API / Data / Worker / Multi-service -->
-  <g font-family="Inter,Arial" font-size="20" font-weight="800">
-    <g fill="#fff">
-      <rect x="112" y="392" width="200" height="86"/>
-      <rect x="324" y="392" width="200" height="86"/>
-      <rect x="536" y="392" width="200" height="86"/>
-      <rect x="748" y="392" width="200" height="86"/>
-      <rect x="960" y="392" width="128" height="86"/>
-    </g>
-    <g fill="#111">
-      <text x="212" y="432" text-anchor="middle">API</text>
-      <text x="212" y="456" text-anchor="middle" font-size="12" font-weight="500" opacity="0.6">contract + runtime + envelope</text>
-      <text x="424" y="432" text-anchor="middle">DB CRUD</text>
-      <text x="424" y="456" text-anchor="middle" font-size="12" font-weight="500" opacity="0.6">round-trip test</text>
-      <text x="636" y="432" text-anchor="middle">Worker</text>
-      <text x="636" y="456" text-anchor="middle" font-size="12" font-weight="500" opacity="0.6">queue · py + node</text>
-      <text x="848" y="432" text-anchor="middle">Multi-service</text>
-      <text x="848" y="456" text-anchor="middle" font-size="12" font-weight="500" opacity="0.6">cross-service smoke</text>
-      <text x="1024" y="432" text-anchor="middle">Config</text>
-      <text x="1024" y="456" text-anchor="middle" font-size="12" font-weight="500" opacity="0.6">py + node</text>
-    </g>
-  </g>
-
-  <!-- Specialized group label -->
-  <text x="112" y="520" font-family="Inter,Arial" font-size="14" font-weight="700" fill="#fff" opacity="0.6" letter-spacing="2">SPECIALIZED SURFACES</text>
-
-  <!-- Row 3: Specialized -->
-  <g font-family="Inter,Arial" font-size="20" font-weight="800">
-    <g fill="#fff">
-      <rect x="112" y="536" width="156" height="86"/>
-      <rect x="280" y="536" width="156" height="86"/>
-      <rect x="448" y="536" width="156" height="86"/>
-      <rect x="616" y="536" width="156" height="86"/>
-      <rect x="784" y="536" width="156" height="86"/>
-      <rect x="952" y="536" width="136" height="86"/>
-    </g>
-    <g fill="#111">
-      <text x="190" y="576" text-anchor="middle">Game</text>
-      <text x="190" y="600" text-anchor="middle" font-size="12" font-weight="500" opacity="0.6">loop · input · asset</text>
-      <text x="358" y="576" text-anchor="middle">3D / WebGL</text>
-      <text x="358" y="600" text-anchor="middle" font-size="12" font-weight="500" opacity="0.6">renderer · canvas</text>
-      <text x="526" y="576" text-anchor="middle">ML Inference</text>
-      <text x="526" y="600" text-anchor="middle" font-size="12" font-weight="500" opacity="0.6">model · sample I/O</text>
-      <text x="694" y="576" text-anchor="middle">Media</text>
-      <text x="694" y="600" text-anchor="middle" font-size="12" font-weight="500" opacity="0.6">pipeline · fixture</text>
-      <text x="862" y="576" text-anchor="middle">Mobile</text>
-      <text x="862" y="600" text-anchor="middle" font-size="12" font-weight="500" opacity="0.6">Expo · RN · Capacitor</text>
-      <text x="1020" y="576" text-anchor="middle">Desktop</text>
-      <text x="1020" y="600" text-anchor="middle" font-size="12" font-weight="500" opacity="0.6">Electron · Tauri</text>
-    </g>
-  </g>
-
-  <!-- Three-tier band label -->
-  <text x="112" y="664" font-family="Inter,Arial" font-size="14" font-weight="700" fill="#fff" opacity="0.6" letter-spacing="2">EVERY SURFACE · 3 TIERS OF DEPTH</text>
-
-  <!-- Row 4: Three tiers shown as three equal blocks -->
-  <g font-family="Inter,Arial" font-size="20" font-weight="800">
-    <g fill="#fff">
-      <rect x="112" y="680" width="316" height="116"/>
-      <rect x="442" y="680" width="316" height="116"/>
-      <rect x="772" y="680" width="316" height="116"/>
-    </g>
-    <g fill="#111">
-      <text x="270" y="716" text-anchor="middle">Tier 1 · Structural</text>
-      <text x="270" y="744" text-anchor="middle" font-size="13" font-weight="500" opacity="0.65">Always-on. Source shape, route decorators, manifest schema, ML magic bytes — fails on wrapper-only demos.</text>
-      <text x="600" y="716" text-anchor="middle">Tier 2 · Behavioural runtime</text>
-      <text x="600" y="744" text-anchor="middle" font-size="13" font-weight="500" opacity="0.65">Exercises the surface end-to-end. test_client, NotebookClient, sharp resize, InferenceSession — skips honestly when the runtime lib is absent.</text>
-      <text x="930" y="716" text-anchor="middle">Tier 3 · Productization</text>
-      <text x="930" y="744" text-anchor="middle" font-size="13" font-weight="500" opacity="0.65">Operational maturity above runtime. Error envelope, streaming SSE, prompt-eval, provider fallback, token budget, template registry.</text>
-    </g>
-  </g>
-
-  <!-- Subtle connectors from rows to tier band -->
-  <g stroke="#fff" stroke-width="3" opacity="0.18">
-    <line x1="212" y1="334" x2="212" y2="392"/>
-    <line x1="424" y1="334" x2="424" y2="392"/>
-    <line x1="636" y1="334" x2="636" y2="392"/>
-    <line x1="848" y1="334" x2="848" y2="392"/>
-    <line x1="1024" y1="334" x2="1024" y2="392"/>
-    <line x1="212" y1="478" x2="212" y2="536"/>
-    <line x1="424" y1="478" x2="424" y2="536"/>
-    <line x1="636" y1="478" x2="636" y2="536"/>
-    <line x1="848" y1="478" x2="848" y2="536"/>
-    <line x1="270" y1="622" x2="270" y2="680"/>
-    <line x1="600" y1="622" x2="600" y2="680"/>
-    <line x1="930" y1="622" x2="930" y2="680"/>
+  <g stroke="#fff" stroke-width="4" opacity="0.5">
+    <path d="M396 282h62M742 282h62M254 340v74M600 340v74M946 340v74M396 472h62M742 472h62M600 530v74"/>
   </g>
 </svg>
