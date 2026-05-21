@@ -4491,7 +4491,7 @@ interface NodeApiRuntimeLayout {
   routes: Array<{ method: string; path: string; payloadKeys: string[]; pathArgs: Array<{ name: string; sample: string | number }>; callsExternalService: boolean }>;
 }
 
-async function detectNodeApiRuntimeLayout(projectPath: string): Promise<NodeApiRuntimeLayout | null> {
+export async function detectNodeApiRuntimeLayout(projectPath: string): Promise<NodeApiRuntimeLayout | null> {
   for (const rel of NODE_API_ENTRY_CANDIDATES) {
     const text = await readTextSafe(path.join(projectPath, rel));
     if (!text) continue;
@@ -4500,8 +4500,8 @@ async function detectNodeApiRuntimeLayout(projectPath: string): Promise<NodeApiR
     else if (/from\s+['"]fastify['"]|require\(\s*['"]fastify['"]\s*\)/.test(text)) framework = 'fastify';
     else if (/from\s+['"]express['"]|require\(\s*['"]express['"]\s*\)/.test(text)) framework = 'express';
     if (!framework) continue;
-    const externalSurface = await aggregateNodeImportExternalSurface(projectPath, rel, text);
-    const routes = parseNodeApiRoutes(text, externalSurface);
+    const surface = await aggregateNodeImportSurfaceDetailed(projectPath, rel, text);
+    const routes = parseNodeApiRoutes(text, surface.moduleReachesExternal, surface.externalImportNames);
     if (routes.length === 0) continue;
     // Find the exported app symbol. Patterns:
     //   export default app;  →  default
@@ -4516,10 +4516,11 @@ async function detectNodeApiRuntimeLayout(projectPath: string): Promise<NodeApiR
   return null;
 }
 
-function parseNodeApiRoutes(text: string, externalSurface?: boolean): NodeApiRuntimeLayout['routes'] {
+function parseNodeApiRoutes(text: string, externalSurface?: boolean, externalNames?: Set<string>): NodeApiRuntimeLayout['routes'] {
   const out: NodeApiRuntimeLayout['routes'] = [];
   const seen = new Set<string>();
   const moduleImportsExternal = externalSurface === true || NODE_EXTERNAL_SERVICE_IMPORT_RE.test(text);
+  const taintedNames = externalNames ?? new Set<string>();
   // Match `app.METHOD('/path', handler)` / `router.METHOD('/path', handler)`.
   // Captures handler text up to the next route declaration or end of file.
   const routeRe = /\b(?:app|router|api)\.(get|post|put|delete|patch)\s*\(\s*(['"`])([^'"`]+)\2\s*,\s*([\s\S]*?)(?=\n\s*(?:app|router|api)\.|$)/g;
@@ -4535,15 +4536,32 @@ function parseNodeApiRoutes(text: string, externalSurface?: boolean): NodeApiRun
     const payloadKeys = Array.from(handlerSlice.matchAll(/(?:req\.body|body|payload|c\.req\.json\(\)|await\s+c\.req\.json\(\))\.(\w+)/g)).map((mm) => mm[1] ?? '').filter(Boolean).slice(0, 4);
     const directExternal = EXTERNAL_SERVICE_RE.test(handlerSlice);
     const indirectExternal = moduleImportsExternal && EXTERNAL_SERVICE_CALL_SHAPE_RE.test(handlerSlice);
+    const taintedCall = handlerCallsTaintedName(handlerSlice, taintedNames);
     out.push({
       method,
       path: route,
       payloadKeys,
       pathArgs: detectNodePathArgs(route),
-      callsExternalService: directExternal || indirectExternal,
+      callsExternalService: directExternal || indirectExternal || taintedCall,
     });
   }
   return out;
+}
+
+// True iff the handler body calls any of the given names — either as a bare
+// function (`name(...)`) or as a method root (`name.method(...)`). Used to
+// propagate the externally-reaching taint through opaque internal helpers.
+function handlerCallsTaintedName(handlerSlice: string, taintedNames: Set<string>): boolean {
+  if (taintedNames.size === 0) return false;
+  for (const n of taintedNames) {
+    const re = new RegExp(`\\b${escapeRegExpLocal(n)}\\s*(?:\\(|\\.)`);
+    if (re.test(handlerSlice)) return true;
+  }
+  return false;
+}
+
+function escapeRegExpLocal(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function detectNodePathArgs(route: string): Array<{ name: string; sample: string | number }> {
@@ -4574,8 +4592,8 @@ export async function detectPythonApiRuntimeLayout(projectPath: string): Promise
     const framework: 'flask' | 'fastapi' = fastapi ? 'fastapi' : 'flask';
     const appAttribute = inferAppAttribute(text, framework);
     if (!appAttribute) continue;
-    const externalSdkSurface = await aggregatePythonImportExternalSurface(projectPath, rel, text);
-    const routes = parseApiRoutes(text, framework, externalSdkSurface);
+    const surface = await aggregatePythonImportSurfaceDetailed(projectPath, rel, text);
+    const routes = parseApiRoutes(text, framework, surface.moduleReachesExternal, surface.externalImportNames);
     if (routes.length === 0) continue;
     const entryModule = rel.replace(/\.py$/, '').replace(/\//g, '.');
     return {
@@ -4600,27 +4618,49 @@ export async function aggregatePythonImportExternalSurface(
   entryRel: string,
   entryText: string,
 ): Promise<boolean> {
-  return bfsImportSurface({
+  return (await aggregatePythonImportSurfaceDetailed(projectPath, entryRel, entryText)).moduleReachesExternal;
+}
+
+/**
+ * Detailed surface: returns both whether the entry module reaches an
+ * external SDK transitively AND the set of names imported at the entry
+ * level whose source module reaches an external SDK. The names let route
+ * parsers flag handlers that delegate via `await route_message(...)` to
+ * an opaque internal helper that itself transitively imports openai/etc.
+ */
+export interface ImportSurfaceDetailed {
+  moduleReachesExternal: boolean;
+  externalImportNames: Set<string>;
+}
+
+export async function aggregatePythonImportSurfaceDetailed(
+  projectPath: string,
+  entryRel: string,
+  entryText: string,
+): Promise<ImportSurfaceDetailed> {
+  return bfsImportSurfaceDetailed({
     projectPath,
     entryRel,
     entryText,
     externalRe: EXTERNAL_SERVICE_IMPORT_RE,
     extractTargets: extractPythonImportTargets,
+    extractEntries: extractPythonImportEntries,
     resolveCandidates: (target, entryDir) => resolvePythonImportToFiles(projectPath, entryDir, target),
   });
 }
 
-async function aggregateNodeImportExternalSurface(
+export async function aggregateNodeImportSurfaceDetailed(
   projectPath: string,
   entryRel: string,
   entryText: string,
-): Promise<boolean> {
-  return bfsImportSurface({
+): Promise<ImportSurfaceDetailed> {
+  return bfsImportSurfaceDetailed({
     projectPath,
     entryRel,
     entryText,
     externalRe: NODE_EXTERNAL_SERVICE_IMPORT_RE,
     extractTargets: extractNodeImportTargets,
+    extractEntries: extractNodeImportEntries,
     resolveCandidates: (target, entryDir) => resolveNodeImportToFiles(projectPath, entryDir, target),
   });
 }
@@ -4674,6 +4714,81 @@ async function bfsImportSurface(args: BfsImportSurfaceArgs): Promise<boolean> {
   return false;
 }
 
+interface BfsImportSurfaceDetailedArgs extends BfsImportSurfaceArgs {
+  extractEntries: (text: string) => ImportEntry[];
+}
+
+// Detailed BFS: for each top-level (target, names) import in the entry file,
+// run a sub-BFS starting from that target. If the sub-BFS reaches a module
+// matching externalRe, ALL names introduced by that import are flagged as
+// externally-reaching. Read-results are cached across sub-BFS runs so the
+// total work is bounded by the global BFS_MAX_FILES * number of imports.
+async function bfsImportSurfaceDetailed(args: BfsImportSurfaceDetailedArgs): Promise<ImportSurfaceDetailed> {
+  const { projectPath, entryRel, entryText, externalRe, extractTargets, extractEntries, resolveCandidates } = args;
+  // If the entry file imports an external SDK directly, every entry-level
+  // import name is irrelevant (the handler body would use SDK names directly,
+  // matched by EXTERNAL_SERVICE_RE in parseApiRoutes). Bail with bool only.
+  if (externalRe.test(entryText)) {
+    return { moduleReachesExternal: true, externalImportNames: new Set() };
+  }
+  const externalImportNames = new Set<string>();
+  const entryAbs = path.resolve(projectPath, entryRel);
+  const entryDir = path.relative(projectPath, path.dirname(entryAbs)) || '.';
+  // Cache parsed text + reachability per absolute file path. `null` text =
+  // file unreadable. `reaches` left undefined until determined.
+  const textCache = new Map<string, string | null>();
+  const readCached = async (abs: string): Promise<string | null> => {
+    if (textCache.has(abs)) return textCache.get(abs)!;
+    const t = await readTextSafe(abs);
+    textCache.set(abs, t ?? null);
+    return t ?? null;
+  };
+  // Helper: BFS forward from a single target's candidate files. Returns true
+  // if any visited module imports an external SDK.
+  const targetReaches = async (target: string): Promise<boolean> => {
+    const seen = new Set<string>([entryAbs]);
+    type QI = { absPath: string; depth: number };
+    const queue: QI[] = [];
+    for (const cand of resolveCandidates(target, entryDir)) {
+      const abs = path.resolve(cand);
+      if (seen.has(abs)) continue;
+      const text = await readCached(abs);
+      if (!text) continue;
+      seen.add(abs);
+      if (externalRe.test(text)) return true;
+      queue.push({ absPath: abs, depth: 1 });
+    }
+    while (queue.length > 0 && seen.size < BFS_MAX_FILES) {
+      const next = queue.shift()!;
+      if (next.depth >= BFS_MAX_DEPTH) continue;
+      const text = await readCached(next.absPath);
+      if (!text) continue;
+      const subDir = path.relative(projectPath, path.dirname(next.absPath)) || '.';
+      for (const tgt of extractTargets(text)) {
+        for (const cand of resolveCandidates(tgt, subDir)) {
+          const abs = path.resolve(cand);
+          if (seen.has(abs)) continue;
+          const childText = await readCached(abs);
+          if (!childText) continue;
+          seen.add(abs);
+          if (externalRe.test(childText)) return true;
+          queue.push({ absPath: abs, depth: next.depth + 1 });
+          if (seen.size >= BFS_MAX_FILES) break;
+        }
+        if (seen.size >= BFS_MAX_FILES) break;
+      }
+    }
+    return false;
+  };
+  for (const entry of extractEntries(entryText)) {
+    if (entry.names.length === 0) continue;
+    if (await targetReaches(entry.target)) {
+      for (const n of entry.names) externalImportNames.add(n);
+    }
+  }
+  return { moduleReachesExternal: externalImportNames.size > 0, externalImportNames };
+}
+
 function extractPythonImportTargets(text: string): string[] {
   const out = new Set<string>();
   // Match `from .x import y` / `from .pkg.x import y` / `from x import y`
@@ -4691,6 +4806,42 @@ function extractPythonImportTargets(text: string): string[] {
   return Array.from(out);
 }
 
+interface ImportEntry { target: string; names: string[] }
+
+// Per top-level import in `text`, return the (target, names) pair so callers
+// can map handler-body call sites back to which import source they came from.
+function extractPythonImportEntries(text: string): ImportEntry[] {
+  const out: ImportEntry[] = [];
+  // `from X import a, b as c, d` — captures each name (with optional alias).
+  for (const m of text.matchAll(/^\s*from\s+(\.{1,2})?([\w][\w.]*)\s+import\s+([^\n#]+)/gm)) {
+    const dots = m[1] ?? '';
+    const dotted = m[2] ?? '';
+    const tail = (m[3] ?? '').trim();
+    if (!dotted || !tail) continue;
+    // Drop trailing comments and the `(...)` wrappers that pep8 allows.
+    const cleaned = tail.replace(/[()]/g, '').replace(/#.*$/, '');
+    const names: string[] = [];
+    for (const seg of cleaned.split(',')) {
+      const s = seg.trim();
+      if (!s || s === '*') continue;
+      // `name` or `name as alias` — the alias is what's bound locally.
+      const aliasMatch = s.match(/^(\w+)\s+as\s+(\w+)$/);
+      if (aliasMatch) names.push(aliasMatch[2]!);
+      else if (/^\w+$/.test(s)) names.push(s);
+    }
+    out.push({ target: `${dots}${dotted}`, names });
+  }
+  // `import X` / `import X as Y` / `import X.Y` (binds top component or alias).
+  for (const m of text.matchAll(/^\s*import\s+([\w][\w.]*)(?:\s+as\s+(\w+))?/gm)) {
+    const dotted = m[1] ?? '';
+    if (!dotted) continue;
+    const alias = m[2];
+    const localName = alias ? alias : dotted.split('.')[0]!;
+    out.push({ target: dotted, names: [localName] });
+  }
+  return out;
+}
+
 function extractNodeImportTargets(text: string): string[] {
   const out = new Set<string>();
   for (const m of text.matchAll(/(?:from\s+|require\s*\(\s*)['"](\.{1,2}\/[^'"]+|\.[^'"]+)['"]/g)) {
@@ -4698,6 +4849,52 @@ function extractNodeImportTargets(text: string): string[] {
     if (spec) out.add(spec);
   }
   return Array.from(out);
+}
+
+function extractNodeImportEntries(text: string): ImportEntry[] {
+  const out: ImportEntry[] = [];
+  // ESM: `import defaultName from './foo'`
+  for (const m of text.matchAll(/import\s+(\w+)\s+from\s+['"](\.{1,2}\/[^'"]+|\.[^'"]+)['"]/g)) {
+    const name = m[1]!;
+    const target = m[2]!;
+    out.push({ target, names: [name] });
+  }
+  // ESM: `import { a, b as c } from './foo'`
+  for (const m of text.matchAll(/import\s*\{\s*([^}]+)\s*\}\s*from\s+['"](\.{1,2}\/[^'"]+|\.[^'"]+)['"]/g)) {
+    const inside = m[1]!;
+    const target = m[2]!;
+    const names: string[] = [];
+    for (const seg of inside.split(',')) {
+      const s = seg.trim();
+      if (!s) continue;
+      const aliasMatch = s.match(/^(\w+)\s+as\s+(\w+)$/);
+      if (aliasMatch) names.push(aliasMatch[2]!);
+      else if (/^\w+$/.test(s)) names.push(s);
+    }
+    out.push({ target, names });
+  }
+  // ESM: `import * as ns from './foo'`
+  for (const m of text.matchAll(/import\s*\*\s*as\s+(\w+)\s+from\s+['"](\.{1,2}\/[^'"]+|\.[^'"]+)['"]/g)) {
+    out.push({ target: m[2]!, names: [m[1]!] });
+  }
+  // CJS: `const name = require('./foo')` and `const { a, b } = require('./foo')`
+  for (const m of text.matchAll(/(?:const|let|var)\s+(\w+)\s*=\s*require\(\s*['"](\.{1,2}\/[^'"]+|\.[^'"]+)['"]\s*\)/g)) {
+    out.push({ target: m[2]!, names: [m[1]!] });
+  }
+  for (const m of text.matchAll(/(?:const|let|var)\s*\{\s*([^}]+)\s*\}\s*=\s*require\(\s*['"](\.{1,2}\/[^'"]+|\.[^'"]+)['"]\s*\)/g)) {
+    const inside = m[1]!;
+    const target = m[2]!;
+    const names: string[] = [];
+    for (const seg of inside.split(',')) {
+      const s = seg.trim();
+      if (!s) continue;
+      const aliasMatch = s.match(/^(\w+)\s*:\s*(\w+)$/);
+      if (aliasMatch) names.push(aliasMatch[2]!);
+      else if (/^\w+$/.test(s)) names.push(s);
+    }
+    out.push({ target, names });
+  }
+  return out;
 }
 
 function resolveNodeImportToFiles(projectPath: string, entryDir: string, target: string): string[] {
@@ -4756,17 +4953,17 @@ function collectEnvKeysFromText(text: string): string[] {
   return Array.from(out);
 }
 
-function parseApiRoutes(text: string, framework: 'flask' | 'fastapi', externalSurface?: boolean): ApiRouteInvocation[] {
+function parseApiRoutes(text: string, framework: 'flask' | 'fastapi', externalSurface?: boolean, externalNames?: Set<string>): ApiRouteInvocation[] {
   const routes: ApiRouteInvocation[] = [];
   const seen = new Set<string>();
   // Pre-compute module-level external-service signals once. A handler is
   // considered external when EITHER its body directly references an external
   // SDK, OR the module imports one AND the handler body calls a service-call
-  // shape (e.g. `client.chat.completions.create(...)`, `model.invoke(...)`).
-  // The caller may pass an explicit `externalSurface=true` to indicate that
-  // a depth-1 imported module brings in an external SDK even though this
-  // file does not directly.
+  // shape (e.g. `client.chat.completions.create(...)`, `model.invoke(...)`),
+  // OR the handler body calls one of the imported names whose source module
+  // transitively reaches an external SDK (BFS-taint propagation).
   const moduleImportsExternal = externalSurface === true || EXTERNAL_SERVICE_IMPORT_RE.test(text);
+  const taintedNames = externalNames ?? new Set<string>();
   // Flask: @app.route('/x', methods=[...]) or @app.{get,post,...}('/x') or app.add_url_rule
   // FastAPI: @app.{get,post,...}('/x') or @router.{...}; we treat @router same as app for invocation.
   const decoratorRe = framework === 'fastapi'
@@ -4809,21 +5006,18 @@ function parseApiRoutes(text: string, framework: 'flask' | 'fastapi', externalSu
     if (seen.has(key)) return;
     seen.add(key);
     const directExternal = EXTERNAL_SERVICE_RE.test(handlerSlice);
-    // KNOWN LIMITATION: when BFS finds an external SDK in a depth-2+ sibling
-    // module but the handler delegates via an opaque internal name (e.g.
-    // `await route_message(...)`), the shape-based regex below does NOT
-    // flag the route as externally-reaching. The fix is to track imported
-    // names from externally-reaching modules and check the handler body
-    // for any of them. Until that lands, prefer naming handler helpers
-    // with one of the recognised shapes (client.*.create, model.invoke, …)
-    // OR call the external SDK directly from the route handler.
     const indirectExternal = moduleImportsExternal && EXTERNAL_SERVICE_CALL_SHAPE_RE.test(handlerSlice);
+    // Taint propagation: handler calls one of the entry-level imported names
+    // whose source module transitively reaches an external SDK. Catches the
+    // `await route_message(body)` shape where the SDK lives several modules
+    // deep behind an internal helper.
+    const taintedCall = handlerCallsTaintedName(handlerSlice, taintedNames);
     routes.push({
       method,
       path: route,
       payloadKeys: detectHandlerPayloadKeys(handlerSlice),
       pathArgs: detectPathArgs(route, framework),
-      callsExternalService: directExternal || indirectExternal,
+      callsExternalService: directExternal || indirectExternal || taintedCall,
     });
   }
 }

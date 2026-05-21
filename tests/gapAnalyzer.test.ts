@@ -2891,6 +2891,123 @@ describe('gapAnalyzer', () => {
     expect(reachesExternal).toBe(false);
   });
 
+  it('BFS surface (detailed, python) records imported names from externally-reaching modules', async () => {
+    // app.py imports `route_message` from services.router which transitively
+    // reaches openai. The detailed surface should report `route_message` as
+    // an externally-reaching name so a route handler that calls
+    // `await route_message(...)` can be flagged externally-reaching even
+    // though the handler body never names the SDK directly.
+    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-bfs-names-py-'));
+    await fs.mkdir(path.join(dir, 'services'), { recursive: true });
+    const entryText = 'from services.router import route_message, healthcheck\nasync def main(): pass\n';
+    await fs.writeFile(path.join(dir, 'app.py'), entryText);
+    await fs.writeFile(path.join(dir, 'services', '__init__.py'), '');
+    await fs.writeFile(
+      path.join(dir, 'services', 'router.py'),
+      'from services.llm import call_llm\nasync def route_message(m): return await call_llm(m)\nasync def healthcheck(): return True\n',
+    );
+    await fs.writeFile(
+      path.join(dir, 'services', 'llm.py'),
+      'import openai\nasync def call_llm(m): pass\n',
+    );
+    const { aggregatePythonImportSurfaceDetailed } = await import('../src/agents/providers/RuleBasedExecutor.js') as any;
+    const result = await aggregatePythonImportSurfaceDetailed(dir, 'app.py', entryText);
+    expect(result.moduleReachesExternal).toBe(true);
+    expect(Array.from(result.externalImportNames).sort()).toEqual(['healthcheck', 'route_message']);
+  });
+
+  it('BFS surface (detailed, node) records imported names from externally-reaching modules', async () => {
+    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-bfs-names-node-'));
+    await fs.mkdir(path.join(dir, 'services'), { recursive: true });
+    const entryText = "import { routeMessage } from './services/router.js';\nimport express from 'express';\nconst app = express();\n";
+    await fs.writeFile(path.join(dir, 'app.js'), entryText);
+    await fs.writeFile(
+      path.join(dir, 'services', 'router.js'),
+      "import { callLlm } from './llm.js';\nexport async function routeMessage(m) { return callLlm(m); }\n",
+    );
+    await fs.writeFile(
+      path.join(dir, 'services', 'llm.js'),
+      "import OpenAI from 'openai';\nexport async function callLlm(m) { return new OpenAI().chat.completions.create({}); }\n",
+    );
+    const { aggregateNodeImportSurfaceDetailed } = await import('../src/agents/providers/RuleBasedExecutor.js') as any;
+    const result = await aggregateNodeImportSurfaceDetailed(dir, 'app.js', entryText);
+    expect(result.moduleReachesExternal).toBe(true);
+    expect(Array.from(result.externalImportNames)).toContain('routeMessage');
+  });
+
+  it('flags a flask route as callsExternalService when handler calls an opaque internal helper reaching an external SDK', async () => {
+    // The known limitation flagged in parseApiRoutes' comments: a handler
+    // that delegates via `await route_message(...)` to an internal module
+    // that BFS-reaches openai should still be flagged externally-reaching.
+    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-route-taint-flask-'));
+    await fs.mkdir(path.join(dir, 'services'), { recursive: true });
+    await fs.writeFile(
+      path.join(dir, 'app.py'),
+      [
+        'from flask import Flask, jsonify, request',
+        'from services.router import route_message',
+        '',
+        'app = Flask(__name__)',
+        '',
+        '@app.post("/chat")',
+        'def chat():',
+        '    body = request.get_json() or {}',
+        '    return jsonify({"reply": route_message(body.get("message", ""))})',
+        '',
+      ].join('\n'),
+    );
+    await fs.writeFile(path.join(dir, 'services', '__init__.py'), '');
+    await fs.writeFile(
+      path.join(dir, 'services', 'router.py'),
+      'from services.llm import call_llm\ndef route_message(m): return call_llm(m)\n',
+    );
+    await fs.writeFile(
+      path.join(dir, 'services', 'llm.py'),
+      'import openai\ndef call_llm(m): return openai.OpenAI().chat.completions.create(model="x", messages=[]).choices[0].message.content\n',
+    );
+    const { detectPythonApiRuntimeLayout } = await import('../src/agents/providers/RuleBasedExecutor.js') as any;
+    const layout = await detectPythonApiRuntimeLayout(dir);
+    expect(layout).not.toBeNull();
+    const chatRoute = layout.routes.find((r: any) => r.path === '/chat');
+    expect(chatRoute).toBeDefined();
+    expect(chatRoute.callsExternalService).toBe(true);
+  });
+
+  it('flags an express route as callsExternalService when handler calls an opaque internal helper reaching an external SDK', async () => {
+    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-route-taint-express-'));
+    await fs.mkdir(path.join(dir, 'services'), { recursive: true });
+    await fs.writeFile(
+      path.join(dir, 'app.js'),
+      [
+        "import express from 'express';",
+        "import { routeMessage } from './services/router.js';",
+        '',
+        'const app = express();',
+        '',
+        "app.post('/chat', async (req, res) => {",
+        '  const reply = await routeMessage(req.body.message);',
+        '  res.json({ reply });',
+        '});',
+        '',
+        'export default app;',
+      ].join('\n'),
+    );
+    await fs.writeFile(
+      path.join(dir, 'services', 'router.js'),
+      "import { callLlm } from './llm.js';\nexport async function routeMessage(m) { return callLlm(m); }\n",
+    );
+    await fs.writeFile(
+      path.join(dir, 'services', 'llm.js'),
+      "import OpenAI from 'openai';\nexport async function callLlm(m) { return new OpenAI().chat.completions.create({}); }\n",
+    );
+    const { detectNodeApiRuntimeLayout } = await import('../src/agents/providers/RuleBasedExecutor.js') as any;
+    const layout = await detectNodeApiRuntimeLayout(dir);
+    expect(layout).not.toBeNull();
+    const chatRoute = layout.routes.find((r: any) => r.path === '/chat');
+    expect(chatRoute).toBeDefined();
+    expect(chatRoute.callsExternalService).toBe(true);
+  });
+
   it('suppresses LLM chat-style findings for an LLM-backed simulation server that has no chat route', async () => {
     // Servers that use the LLM as an internal agent (e.g. background game loops)
     // legitimately have no /chat-style HTTP surface. The four chat gates should
