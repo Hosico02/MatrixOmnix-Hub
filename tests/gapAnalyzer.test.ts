@@ -3011,4 +3011,61 @@ describe('gapAnalyzer', () => {
     // have fired at all. The archetype + absence checks above are the
     // primary contract; the recommendation is best-effort transparency.
   });
+
+  it('does not classify the flask framework repo itself as a flask app or CLI', async () => {
+    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-flask-self-'));
+    await fs.writeFile(path.join(dir, 'README.md'), '# flask\n\n' + 'x'.repeat(220));
+    // The framework repo as it actually exists: build-backend + classifiers
+    // + console_scripts (flask ships a `flask` CLI) + click dep. Pre-Session-4
+    // this would have routed to python-cli at 1.0 because cli signals
+    // dominate. The framework-name penalty puts it back on python-library.
+    await fs.writeFile(
+      path.join(dir, 'pyproject.toml'),
+      [
+        '[build-system]',
+        'requires = ["flit_core"]',
+        'build-backend = "flit_core.buildapi"',
+        '',
+        '[project]',
+        'name = "Flask"',
+        'version = "3.0.0"',
+        'classifiers = ["License :: OSI Approved :: BSD License"]',
+        'dependencies = ["click>=8.1.3"]',
+        '',
+        '[project.scripts]',
+        'flask = "flask.cli:main"',
+        '',
+        '[tool.setuptools.entry-points."console_scripts"]',
+        'flask = "flask.cli:main"',
+        '',
+      ].join('\n'),
+    );
+    await fs.mkdir(path.join(dir, 'src', 'flask'), { recursive: true });
+    await fs.writeFile(path.join(dir, 'src', 'flask', '__init__.py'), 'from flask.app import Flask\n');
+    await fs.writeFile(path.join(dir, 'src', 'flask', 'app.py'), 'class Flask:\n    pass\n');
+    await fs.writeFile(path.join(dir, 'src', 'flask', 'cli.py'), 'def main():\n    pass\n');
+
+    const { gap } = await new AnalyzerAgent().fullAnalyze(dir);
+    const arche = gap.project_snapshot.detected_archetype?.id ?? 'unknown';
+    expect(arche).not.toBe('flask-web-app');
+    expect(arche).not.toBe('python-cli');
+    expect(['python-library', 'python-package']).toContain(arche);
+  });
+
+  it('detects mdbook structure as mdbook-project even with many Rust listings', async () => {
+    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-mdbook-'));
+    await fs.writeFile(path.join(dir, 'README.md'), '# Some Book\n\n' + 'x'.repeat(220));
+    await fs.writeFile(path.join(dir, 'book.toml'), '[book]\ntitle = "Some Book"\n');
+    await fs.mkdir(path.join(dir, 'src'), { recursive: true });
+    await fs.writeFile(path.join(dir, 'src', 'SUMMARY.md'), '# Summary\n- [Intro](./intro.md)\n');
+    await fs.writeFile(path.join(dir, 'src', 'intro.md'), '# Intro\n\nSome text.\n');
+    // Lots of Rust listings — would defeat docCount > codeCount otherwise.
+    await fs.mkdir(path.join(dir, 'listings', 'ch01-01'), { recursive: true });
+    for (let i = 0; i < 12; i++) {
+      await fs.writeFile(path.join(dir, 'listings', 'ch01-01', `listing-${i}.rs`), 'fn main() {}\n');
+    }
+
+    const { gap } = await new AnalyzerAgent().fullAnalyze(dir);
+    expect(gap.project_snapshot.detected_archetype?.id).toBe('mdbook-project');
+  });
 });

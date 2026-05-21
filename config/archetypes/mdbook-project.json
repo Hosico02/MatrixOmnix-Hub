@@ -1,0 +1,18 @@
+{
+  "id": "mdbook-project",
+  "name": "mdbook book project",
+  "description": "A book authored with mdbook (Rust). Detected by book.toml + src/SUMMARY.md. Markdown chapters with embedded Rust listings — neither pure docs nor a Rust application.",
+  "recommended_standard": "docs-only-project",
+  "applicable_qa_patterns": [
+    "docs_failure/docs_claim_without_evidence",
+    "docs_failure/outdated_docs"
+  ],
+  "risk_profile": "low",
+  "threshold": 0.5,
+  "signals": [
+    { "type": "file_exists", "path": "book.toml",           "weight": 5, "label": "book.toml" },
+    { "type": "file_glob",   "pattern": "src/SUMMARY.md",   "weight": 5, "label": "src/SUMMARY.md" },
+    { "type": "dir_exists",  "path": "src",                 "weight": 1, "label": "src/" },
+    { "type": "file_glob",   "pattern": "src/*.md",         "weight": 2, "label": "src/*.md (chapters)" }
+  ]
+}

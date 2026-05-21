@@ -63,6 +63,31 @@ interface SignalContext {
 
 type Probe = (ctx: SignalContext) => { hit: boolean; weight: number; signal: string }[];
 
+/**
+ * Names of frameworks that are also npm/pypi packages. When a project's
+ * OWN name (pkg.name or pyproject `name = "..."`) matches one of these,
+ * the project IS that framework's source code — not a user of it. The
+ * app probes (flask-web-app, fastapi-api, react-app, vue-app, nextjs-app)
+ * use this to penalize themselves so they don't claim the framework's
+ * own repo. See Session 4 follow-up: library-as-framework boundary.
+ */
+const KNOWN_FRAMEWORK_NAMES = new Set([
+  'flask', 'fastapi', 'django', 'starlette', 'pydantic', 'sqlalchemy',
+  'react', 'react-dom', 'next', 'vue', '@vue/core', 'svelte', 'sveltekit',
+  'express', 'fastify', 'hono', 'koa', 'nestjs', '@nestjs/core',
+]);
+
+function pyprojectName(pyproject: string): string | null {
+  const m = pyproject.match(/^name\s*=\s*["']([^"']+)["']/m);
+  return m ? m[1]!.toLowerCase() : null;
+}
+
+function projectOwnNameIsKnownFramework(c: SignalContext): boolean {
+  if (c.pkg.name && KNOWN_FRAMEWORK_NAMES.has(c.pkg.name.toLowerCase())) return true;
+  const pname = pyprojectName(c.pyproject);
+  return !!pname && KNOWN_FRAMEWORK_NAMES.has(pname);
+}
+
 const PROBES: Record<ArchetypeId, Probe> = {
   'nextjs-app': (c) => {
     const out: { hit: boolean; weight: number; signal: string }[] = [];
@@ -71,6 +96,7 @@ const PROBES: Record<ArchetypeId, Probe> = {
     out.push({ hit: c.has('next.config.js') || c.has('next.config.mjs') || c.has('next.config.ts'), weight: 3, signal: 'next.config.*' });
     out.push({ hit: c.has('app/') || c.has('pages/') || [...c.files].some((f) => f.startsWith('app/') || f.startsWith('pages/')), weight: 3, signal: 'app/ or pages/' });
     out.push({ hit: !!(c.pkg.scripts && /\bnext\s+(dev|build|start)/.test(Object.values(c.pkg.scripts).join(' '))), weight: 2, signal: 'next scripts' });
+    out.push({ hit: projectOwnNameIsKnownFramework(c), weight: -8, signal: 'penalty:repo IS the framework' });
     return out;
   },
   'react-app': (c) => {
@@ -82,6 +108,7 @@ const PROBES: Record<ArchetypeId, Probe> = {
     out.push({ hit: c.has('index.html') || [...c.files].some((f) => f.endsWith('/index.html')), weight: 2, signal: 'index.html' });
     out.push({ hit: [...c.files].some((f) => /(^|\/)App\.(tsx|jsx)$/.test(f)), weight: 2, signal: 'App.[t|j]sx' });
     out.push({ hit: 'next' in deps, weight: -5, signal: 'NOT next (penalty)' });
+    out.push({ hit: projectOwnNameIsKnownFramework(c), weight: -8, signal: 'penalty:repo IS the framework' });
     return out;
   },
   'vue-app': (c) => {
@@ -92,6 +119,7 @@ const PROBES: Record<ArchetypeId, Probe> = {
     out.push({ hit: [...c.files].some((f) => /(^|\/)App\.vue$/.test(f)), weight: 3, signal: 'App.vue' });
     out.push({ hit: c.has('index.html') || [...c.files].some((f) => f.endsWith('/index.html')), weight: 1, signal: 'index.html' });
     out.push({ hit: !('react' in deps) && !('next' in deps), weight: 1, signal: 'not react/next' });
+    out.push({ hit: projectOwnNameIsKnownFramework(c), weight: -8, signal: 'penalty:repo IS the framework' });
     return out;
   },
   'node-cli': (c) => {
@@ -127,6 +155,11 @@ const PROBES: Record<ArchetypeId, Probe> = {
     out.push({ hit: /\b(typer|click|argparse|fire)\b/.test(c.pyproject), weight: 2, signal: 'cli dep' });
     out.push({ hit: c.snapshot.detected_language === 'python', weight: 2, signal: 'detected_language:python' });
     out.push({ hit: !/\bfastapi\b/.test(c.pyproject), weight: 1, signal: 'no fastapi' });
+    // pallets/flask, tiangolo/fastapi etc. ship a CLI binary (flask, fastapi)
+    // — they have console_scripts AND click in pyproject — but they ARE the
+    // library, not a CLI tool. Penalize when the repo's own name matches a
+    // known framework so python-library/python-package can win.
+    out.push({ hit: projectOwnNameIsKnownFramework(c), weight: -8, signal: 'penalty:repo IS the framework (not a CLI)' });
     return out;
   },
   'python-package': (c) => {
@@ -150,6 +183,7 @@ const PROBES: Record<ArchetypeId, Probe> = {
     out.push({ hit: /\bfastapi\b/.test(c.pyproject) || c.snapshot.detected_frameworks.includes('fastapi'), weight: 4, signal: 'fastapi dep/detection' });
     out.push({ hit: [...c.files].some((f) => /(^|\/)main\.py$/.test(f) || /(^|\/)app\/main\.py$/.test(f)), weight: 2, signal: 'main.py' });
     out.push({ hit: /\buvicorn\b/.test(c.pyproject), weight: 1, signal: 'uvicorn' });
+    out.push({ hit: projectOwnNameIsKnownFramework(c), weight: -8, signal: 'penalty:repo IS the framework' });
     return out;
   },
   'flask-web-app': (c) => {
@@ -160,6 +194,7 @@ const PROBES: Record<ArchetypeId, Probe> = {
     out.push({ hit: [...c.files].some((f) => /(^|\/)tests?\/test_(app|routes|api)\.py$/.test(f)), weight: 2, signal: 'route/API tests' });
     out.push({ hit: c.snapshot.start_commands.some((cmd) => /\b(flask|gunicorn|python3?\s+app\.py)\b/.test(cmd)), weight: 2, signal: 'flask start command' });
     out.push({ hit: !c.snapshot.detected_frameworks.includes('fastapi'), weight: 1, signal: 'not fastapi' });
+    out.push({ hit: projectOwnNameIsKnownFramework(c), weight: -8, signal: 'penalty:repo IS the framework' });
     return out;
   },
   monorepo: (c) => {
