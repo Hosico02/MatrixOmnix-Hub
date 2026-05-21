@@ -8,6 +8,7 @@ import { takeSnapshot } from '../core/projectSnapshot.js';
 import { scoreProject } from '../core/projectScorer.js';
 import { scoreProjectWithEvidence, type EvidenceWeightedOptions } from '../core/evidenceWeightedScorer.js';
 import { analyzeGaps } from '../core/gapAnalyzer.js';
+import { detectArchetype } from '../core/projectArchetypeDetector.js';
 import { DEFAULT_PROJECT_STANDARD } from '../standards/defaultProjectStandard.js';
 import { selectStandardForProject, selectStandardForSnapshot } from '../standards/standardsLibrary.js';
 
@@ -24,8 +25,34 @@ export class AnalyzerAgent {
     }
   }
 
+  /**
+   * Attach the primary archetype to a snapshot. Pure annotation — never
+   * mutates the input, returns a new object. Failures are swallowed so a
+   * detector bug never blocks analyze/gap.
+   */
+  private async withArchetype(snap: ProjectSnapshot): Promise<ProjectSnapshot> {
+    if (snap.detected_archetype) return snap;
+    try {
+      const report = await detectArchetype(snap.project_path, snap);
+      const p = report.primary;
+      return {
+        ...snap,
+        detected_archetype: {
+          id: p.id,
+          name: p.name,
+          confidence: p.confidence,
+          recommended_standard: p.recommended_standard,
+          risk_profile: p.risk_profile,
+        },
+      };
+    } catch {
+      return snap;
+    }
+  }
+
   async snapshot(projectPath: string): Promise<ProjectSnapshot> {
-    return takeSnapshot(projectPath);
+    const snap = await takeSnapshot(projectPath);
+    return this.withArchetype(snap);
   }
 
   async score(snapshot: ProjectSnapshot): Promise<ProjectScore> {

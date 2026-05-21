@@ -114,6 +114,10 @@ const PROBES: Record<ArchetypeId, Probe> = {
     const deps = { ...(c.pkg.dependencies ?? {}), ...(c.pkg.devDependencies ?? {}) };
     out.push({ hit: 'typescript' in deps, weight: 2, signal: 'dep:typescript' });
     out.push({ hit: !('react' in deps) && !('next' in deps), weight: 1, signal: 'no app framework' });
+    // App-framework penalties: a project depending on an HTTP server or UI
+    // framework is not a library, even if it has main/types/exports.
+    out.push({ hit: 'express' in deps || 'fastify' in deps || 'hono' in deps || 'koa' in deps, weight: -4, signal: 'penalty:server framework' });
+    out.push({ hit: 'react' in deps || 'next' in deps || 'vue' in deps || 'svelte' in deps, weight: -4, signal: 'penalty:ui framework' });
     return out;
   },
   'python-cli': (c) => {
@@ -132,6 +136,13 @@ const PROBES: Record<ArchetypeId, Probe> = {
     out.push({ hit: [...c.files].some((f) => f.startsWith('src/') && f.endsWith('.py')), weight: 2, signal: 'src/*.py layout' });
     out.push({ hit: !/\bconsole_scripts\b/.test(c.pyproject), weight: 1, signal: 'no console_scripts' });
     out.push({ hit: !/\bfastapi\b/.test(c.pyproject), weight: 1, signal: 'no fastapi' });
+    // App-framework penalties: a project where Flask/FastAPI/Django is in
+    // detected_frameworks is an application using that framework, not a
+    // library. Without these penalties python-package wins Flask demos at
+    // ~0.78 because none of its existing signals contradict a server.
+    out.push({ hit: c.snapshot.detected_frameworks.includes('flask'), weight: -5, signal: 'penalty:flask app' });
+    out.push({ hit: c.snapshot.detected_frameworks.includes('fastapi'), weight: -5, signal: 'penalty:fastapi app' });
+    out.push({ hit: c.snapshot.detected_frameworks.includes('django'), weight: -3, signal: 'penalty:django app' });
     return out;
   },
   'fastapi-api': (c) => {
@@ -229,8 +240,11 @@ const RISK_PROFILE: Record<ArchetypeId, 'low' | 'medium' | 'high'> = {
   unknown: 'medium',
 };
 
-export async function detectArchetype(projectPath: string): Promise<ArchetypeReport> {
-  const snapshot = await takeSnapshot(projectPath);
+export async function detectArchetype(
+  projectPath: string,
+  preBuiltSnapshot?: ProjectSnapshot,
+): Promise<ArchetypeReport> {
+  const snapshot = preBuiltSnapshot ?? (await takeSnapshot(projectPath));
   const files = new Set(await listFiles(projectPath));
   const has = (rel: string): boolean => files.has(rel) || [...files].some((f) => f.startsWith(rel + '/') || f === rel);
   const pkg = (await readJsonSafe<SignalContext['pkg']>(path.join(projectPath, 'package.json'))) ?? {};
@@ -291,7 +305,18 @@ export async function detectArchetype(projectPath: string): Promise<ArchetypeRep
       threshold: arche.threshold ?? 0.35,
     });
   }
-  scores.sort((a, b) => b.raw / Math.max(1, b.max) - a.raw / Math.max(1, a.max));
+  // Sort by ratio descending, then by raw descending (a probe with more
+  // signal-evidence wins ties), then by max descending (more comprehensive
+  // probe wins). This prevents loose built-in probes (python-package,
+  // typescript-library) from beating stricter declarative probes
+  // (python-library, node-library) on perfect-1.0 ties.
+  scores.sort((a, b) => {
+    const ratioA = a.raw / Math.max(1, a.max);
+    const ratioB = b.raw / Math.max(1, b.max);
+    if (ratioB !== ratioA) return ratioB - ratioA;
+    if (b.raw !== a.raw) return b.raw - a.raw;
+    return b.max - a.max;
+  });
 
   const top = scores[0]!;
   const confidence = top.max === 0 ? 0 : Math.max(0, Math.min(1, top.raw / top.max));

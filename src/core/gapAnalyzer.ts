@@ -39,6 +39,101 @@ function finding(
   };
 }
 
+/**
+ * Archetype ids that represent libraries / packages — projects whose
+ * deliverable is importable code, not a running application or UI. When
+ * one of these wins archetype detection, the gap analyzer suppresses
+ * finding categories that only make sense for runtime apps (healthchecks,
+ * UI render smokes, security headers, deployment artifacts, etc).
+ *
+ * Restricted to the strict declarative archetypes (config/archetypes/
+ * {python-library,node-library}.json). The built-in `python-package` and
+ * `typescript-library` probes are too broad — `python-package` fires for
+ * any python project with a pyproject.toml, including demo apps that
+ * genuinely lack runtime gates. Suppressing on those ids would mask real
+ * findings on every script-style python repo with packaging metadata.
+ *
+ * Session 4 added app-framework penalties to the built-in probes
+ * (so Flask/FastAPI demos no longer LAND on python-package), but adding
+ * those ids to suppression here would still hit non-app non-library
+ * Python projects (worker/config/social-deduction fixtures).
+ */
+const LIBRARY_ARCHETYPE_IDS = new Set([
+  'python-library',
+  'node-library',
+]);
+
+/**
+ * Finding categories that assume the project exposes a runtime surface
+ * (HTTP server, UI, worker daemon, deployable artifact). For libraries
+ * these are wrong by construction — the library's consumer is responsible
+ * for the runtime, not the library itself.
+ */
+const LIBRARY_SUPPRESSED_FINDING_CATEGORIES = new Set([
+  'missing_healthcheck',
+  'missing_api_contract_harness',
+  'missing_api_runtime_behaviour_test',
+  'missing_api_error_envelope',
+  'missing_api_tests',
+  'missing_industrial_api_tests',
+  'missing_security_headers',
+  'missing_python_production_server',
+  'missing_wsgi_entrypoint',
+  'missing_ui_product_verification',
+  'missing_ui_runtime_render_smoke',
+  'missing_browser_extension_runtime_manifest_test',
+  'missing_cli_contract_harness',
+  'missing_config_runtime_load_test',
+  'missing_db_crud_runtime_tests',
+  'missing_deployment_artifact',
+  'missing_deployment_docs',
+  'missing_desktop_runtime_boot_test',
+  'missing_game_runtime_loop_test',
+  'missing_llm_streaming_response',
+  'missing_llm_token_budget_enforcement',
+  'missing_llm_provider_failure_fallback',
+  'missing_media_pipeline_runtime_test',
+  'missing_ml_model_runtime_inference_test',
+  'missing_mobile_runtime_bundle_test',
+  'missing_multi_service_integration_check',
+  'missing_notebook_runtime_execution_test',
+  'missing_operational_docs',
+  'missing_product_runtime_entry',
+  'missing_social_deduction',
+  'missing_social_deduction_mode_startup_guard',
+  'missing_social_deduction_mode_tests',
+  'missing_social_deduction_mode_validation',
+  'missing_social_deduction_rule_tests',
+  'missing_social_deduction_rules_engine',
+  'missing_start_input_validation',
+  'missing_structured_logging',
+  'missing_user_llm_provider_config',
+  'missing_worker_runtime_enqueue_test',
+  'missing_active_game_limit',
+  'missing_demo_surface_contract_matrix',
+]);
+
+/**
+ * Returns true when the snapshot's primary archetype is a library and
+ * the finding's category is in the runtime-app-only set.
+ *
+ * Note: an explicit standard override (caller-supplied ProjectStandard)
+ * is respected by the broader scoring path; this filter only acts on the
+ * detected archetype. Callers that pass a non-library standard against a
+ * library project still see the un-suppressed list — by design.
+ */
+function isLibrarySuppressedFinding(snapshot: ProjectSnapshot, f: GapFinding): boolean {
+  const arch = snapshot.detected_archetype;
+  if (!arch || !LIBRARY_ARCHETYPE_IDS.has(arch.id)) return false;
+  return LIBRARY_SUPPRESSED_FINDING_CATEGORIES.has(f.category);
+}
+
+export const __testing = {
+  LIBRARY_ARCHETYPE_IDS,
+  LIBRARY_SUPPRESSED_FINDING_CATEGORIES,
+  isLibrarySuppressedFinding,
+};
+
 export async function analyzeGaps(
   snapshot: ProjectSnapshot,
   score: ProjectScore,
@@ -1308,6 +1403,16 @@ export async function analyzeGaps(
   await addBehavioralDepthFindings(findings, snapshot, files, pkg);
   addVerificationFailureFindings(findings, snapshot, score);
 
+  // Library archetype suppression: when this project is a library/package
+  // (importable code, not a runtime app), drop findings that only make
+  // sense for a deployed application. See LIBRARY_SUPPRESSED_FINDING_CATEGORIES.
+  const librarySuppressedCount = findings.filter((f) => isLibrarySuppressedFinding(snapshot, f)).length;
+  if (librarySuppressedCount > 0) {
+    for (let i = findings.length - 1; i >= 0; i--) {
+      if (isLibrarySuppressedFinding(snapshot, findings[i]!)) findings.splice(i, 1);
+    }
+  }
+
   const agentMisjudgments = auditAgentMisjudgments({
     findings,
     snapshot,
@@ -1334,6 +1439,11 @@ export async function analyzeGaps(
   if (finalScore.breakdown.build_score < 6) recommendations.push('Add an explicit build/typecheck step.');
   if (agentMisjudgments.length > 0) {
     recommendations.push(`Analyzer suppressed ${agentMisjudgments.length} likely agent misjudgment(s) before planning.`);
+  }
+  if (librarySuppressedCount > 0 && snapshot.detected_archetype) {
+    recommendations.push(
+      `Detected archetype ${snapshot.detected_archetype.id} — suppressed ${librarySuppressedCount} runtime-app-only finding(s) (libraries delegate runtime concerns to their consumer).`,
+    );
   }
 
   const blockers = sortedFindings.filter((f) => f.severity === 'blocker');

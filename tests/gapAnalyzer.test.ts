@@ -2926,4 +2926,89 @@ describe('gapAnalyzer', () => {
     expect(cats).not.toContain('missing_llm_prompt_template_registry');
     expect(cats).not.toContain('missing_llm_streaming_response');
   });
+
+  it('attaches detected_archetype to gap.project_snapshot via AnalyzerAgent', async () => {
+    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-archetype-prop-'));
+    await fs.writeFile(path.join(dir, 'README.md'), '# lib\n\n' + 'x'.repeat(220));
+    await fs.writeFile(
+      path.join(dir, 'pyproject.toml'),
+      [
+        '[build-system]',
+        'requires = ["hatchling"]',
+        'build-backend = "hatchling.build"',
+        '',
+        '[project]',
+        'name = "tinylib"',
+        'version = "0.1.0"',
+        'classifiers = ["License :: OSI Approved :: MIT License"]',
+        '',
+      ].join('\n'),
+    );
+    await fs.mkdir(path.join(dir, 'src', 'tinylib'), { recursive: true });
+    await fs.writeFile(path.join(dir, 'src', 'tinylib', '__init__.py'), 'def hello():\n    return "hi"\n');
+
+    const { gap } = await new AnalyzerAgent().fullAnalyze(dir);
+    expect(gap.project_snapshot.detected_archetype).toBeDefined();
+    expect(gap.project_snapshot.detected_archetype?.id).toBe('python-library');
+    expect(gap.project_snapshot.detected_archetype?.confidence).toBeGreaterThan(0.5);
+  });
+
+  it('detects node-library archetype on a no-bin, exports-only package', async () => {
+    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-node-lib-'));
+    await fs.writeFile(path.join(dir, 'README.md'), '# tiny-lib\n\n' + 'x'.repeat(220));
+    await fs.writeFile(
+      path.join(dir, 'package.json'),
+      JSON.stringify({
+        name: 'tiny-lib',
+        version: '0.1.0',
+        main: 'dist/index.js',
+        module: 'dist/index.mjs',
+        types: 'dist/index.d.ts',
+        exports: { '.': './dist/index.js' },
+        devDependencies: { typescript: '^5.0.0' },
+      }, null, 2),
+    );
+    await fs.writeFile(path.join(dir, 'tsconfig.json'), '{}\n');
+    await fs.mkdir(path.join(dir, 'src'), { recursive: true });
+    await fs.writeFile(path.join(dir, 'src', 'index.ts'), 'export const hi = () => "hi";\n');
+
+    const { gap } = await new AnalyzerAgent().fullAnalyze(dir);
+    expect(gap.project_snapshot.detected_archetype?.id).toBe('node-library');
+  });
+
+  it('suppresses runtime-app-only findings when archetype is python-library', async () => {
+    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-lib-suppress-'));
+    await fs.writeFile(path.join(dir, 'README.md'), '# lib\n\n' + 'x'.repeat(220));
+    await fs.writeFile(
+      path.join(dir, 'pyproject.toml'),
+      [
+        '[build-system]',
+        'requires = ["hatchling"]',
+        'build-backend = "hatchling.build"',
+        '',
+        '[project]',
+        'name = "tinylib"',
+        'version = "0.1.0"',
+        'classifiers = ["License :: OSI Approved :: MIT License"]',
+        '',
+      ].join('\n'),
+    );
+    await fs.mkdir(path.join(dir, 'src', 'tinylib'), { recursive: true });
+    await fs.writeFile(path.join(dir, 'src', 'tinylib', '__init__.py'), 'def hello():\n    return "hi"\n');
+    await fs.mkdir(path.join(dir, 'tests'), { recursive: true });
+    await fs.writeFile(path.join(dir, 'tests', 'test_hello.py'), 'from tinylib import hello\n\ndef test_hello():\n    assert hello() == "hi"\n');
+
+    const { gap } = await new AnalyzerAgent().fullAnalyze(dir);
+    const cats = gap.findings.map((f) => f.category);
+    expect(gap.project_snapshot.detected_archetype?.id).toBe('python-library');
+    expect(cats).not.toContain('missing_healthcheck');
+    expect(cats).not.toContain('missing_python_production_server');
+    expect(cats).not.toContain('missing_wsgi_entrypoint');
+    expect(cats).not.toContain('missing_deployment_artifact');
+    expect(cats).not.toContain('missing_security_headers');
+    // Recommendation is only emitted when at least one finding was actually
+    // suppressed; for this minimal fixture, the app-only gates may never
+    // have fired at all. The archetype + absence checks above are the
+    // primary contract; the recommendation is best-effort transparency.
+  });
 });

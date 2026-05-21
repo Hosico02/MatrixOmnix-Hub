@@ -111,6 +111,19 @@ export interface ProjectSnapshot {
     has_lockfile: boolean;
   };
   timestamp: string;
+  /**
+   * Populated by AnalyzerAgent (Session 4). Carries the primary archetype
+   * detected for this project so downstream consumers — gap analyzer,
+   * generalization bench, library-vs-app gates — don't need to re-detect.
+   * Optional because callers of `takeSnapshot` directly skip detection.
+   */
+  detected_archetype?: {
+    id: string;
+    name: string;
+    confidence: number;
+    recommended_standard: string;
+    risk_profile: 'low' | 'medium' | 'high';
+  };
 }
 
 export interface ScoreBreakdown {
