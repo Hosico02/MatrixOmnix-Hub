@@ -18,6 +18,7 @@
     { "type": "pkg_field",   "field": "types",                                  "weight": 1, "label": "pkg.types" },
     { "type": "file_exists", "path": "index.js",                                "weight": 2, "label": "index.js (root)" },
     { "type": "file_exists", "path": "index.ts",                                "weight": 2, "label": "index.ts (root)" },
+    { "type": "dir_exists",  "path": "lib",                                     "weight": 2, "label": "lib/ (implementation dir)" },
     { "type": "pkg_field",   "field": "bin",                                    "weight": -5, "label": "penalty:bin (CLI)" },
     { "type": "pkg_dep",     "dep": "react",                                    "weight": -3, "label": "penalty:react" },
     { "type": "pkg_dep",     "dep": "next",                                     "weight": -3, "label": "penalty:next" },

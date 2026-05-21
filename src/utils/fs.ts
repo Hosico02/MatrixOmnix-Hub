@@ -32,12 +32,13 @@ export async function appendText(p: string, content: string): Promise<void> {
  * List file paths under `dir` recursively, relative to `dir`.
  * Skips node_modules, .git, dist, .demo2project, common heavy/tool dirs.
  *
- * Walks shallow-first: every directory's own files are pushed BEFORE
- * recursing into subdirectories. This guarantees that shallow markers
- * (book.toml, package.json, Cargo.toml, pyproject.toml at the root)
+ * Walks breadth-first across the whole tree: every file at depth N is
+ * pushed before any file at depth N+1. This guarantees shallow markers
+ * like book.toml, package.json, Cargo.toml, pyproject.toml, src/SUMMARY.md
  * always make it into the result, even on repos like rust-lang/book where
- * a single deep directory (listings/) could otherwise exhaust the cap
- * before sibling files at the same depth get a chance.
+ * a single sibling directory (listings/) holds thousands of deep files
+ * that would otherwise exhaust the cap under a depth-first walk before
+ * src/SUMMARY.md (depth 1) ever gets visited.
  */
 export async function listFiles(dir: string, maxFiles = 2000): Promise<string[]> {
   const skip = new Set([
@@ -56,34 +57,30 @@ export async function listFiles(dir: string, maxFiles = 2000): Promise<string[]>
     '__pycache__',
   ]);
   const out: string[] = [];
-  async function walk(current: string, rel: string): Promise<void> {
-    if (out.length >= maxFiles) return;
-    let entries;
-    try {
-      entries = await fs.readdir(current, { withFileTypes: true });
-    } catch {
-      return;
-    }
-    // Pass 1: push all files at this depth so siblings never lose to a
-    // sibling directory that fills the budget on its own.
-    const subdirs: { abs: string; rel: string }[] = [];
-    for (const e of entries) {
-      if (skip.has(e.name)) continue;
-      const childRel = rel ? path.join(rel, e.name) : e.name;
-      const childAbs = path.join(current, e.name);
-      if (e.isFile()) {
-        out.push(childRel);
-        if (out.length >= maxFiles) return;
-      } else if (e.isDirectory()) {
-        subdirs.push({ abs: childAbs, rel: childRel });
+  let frontier: { abs: string; rel: string }[] = [{ abs: dir, rel: '' }];
+  while (frontier.length > 0 && out.length < maxFiles) {
+    const nextFrontier: { abs: string; rel: string }[] = [];
+    for (const node of frontier) {
+      if (out.length >= maxFiles) break;
+      let entries;
+      try {
+        entries = await fs.readdir(node.abs, { withFileTypes: true });
+      } catch {
+        continue;
+      }
+      for (const e of entries) {
+        if (skip.has(e.name)) continue;
+        const childRel = node.rel ? path.join(node.rel, e.name) : e.name;
+        const childAbs = path.join(node.abs, e.name);
+        if (e.isFile()) {
+          out.push(childRel);
+          if (out.length >= maxFiles) break;
+        } else if (e.isDirectory()) {
+          nextFrontier.push({ abs: childAbs, rel: childRel });
+        }
       }
     }
-    // Pass 2: recurse into directories.
-    for (const sub of subdirs) {
-      if (out.length >= maxFiles) return;
-      await walk(sub.abs, sub.rel);
-    }
+    frontier = nextFrontier;
   }
-  await walk(dir, '');
   return out.sort();
 }

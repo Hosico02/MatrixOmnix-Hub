@@ -14,6 +14,7 @@
     { "type": "lang_equals", "value": "rust",              "weight": 2, "label": "lang:rust" },
     { "type": "file_glob",   "pattern": "src/lib.rs",      "weight": 3, "label": "src/lib.rs (top-level lib)" },
     { "type": "file_glob",   "pattern": "**/lib.rs",       "weight": 3, "label": "<member>/src/lib.rs" },
-    { "type": "file_glob",   "pattern": "src/main.rs",     "weight": -3, "label": "penalty:src/main.rs (binary crate)" }
+    { "type": "file_glob",   "pattern": "src/main.rs",     "weight": -3, "label": "penalty:src/main.rs (binary crate)" },
+    { "type": "file_exists", "path": "book.toml",          "weight": -5, "label": "penalty:book.toml (mdbook project)" }
   ]
 }
