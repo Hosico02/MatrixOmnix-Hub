@@ -1,0 +1,19 @@
+{
+  "id": "rust-library",
+  "name": "Rust library crate",
+  "description": "Rust crate published to crates.io — Cargo.toml with src/lib.rs (top-level) or workspace members with lib.rs. Penalized when src/main.rs exists (binary crate).",
+  "recommended_standard": "generic-project",
+  "applicable_qa_patterns": [
+    "verification_failure/build_failed",
+    "test_quality_failure/empty_test"
+  ],
+  "risk_profile": "low",
+  "threshold": 0.45,
+  "signals": [
+    { "type": "file_exists", "path": "Cargo.toml",         "weight": 3, "label": "Cargo.toml" },
+    { "type": "lang_equals", "value": "rust",              "weight": 2, "label": "lang:rust" },
+    { "type": "file_glob",   "pattern": "src/lib.rs",      "weight": 3, "label": "src/lib.rs (top-level lib)" },
+    { "type": "file_glob",   "pattern": "**/lib.rs",       "weight": 3, "label": "<member>/src/lib.rs" },
+    { "type": "file_glob",   "pattern": "src/main.rs",     "weight": -3, "label": "penalty:src/main.rs (binary crate)" }
+  ]
+}

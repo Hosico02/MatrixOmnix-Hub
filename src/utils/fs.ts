@@ -31,6 +31,13 @@ export async function appendText(p: string, content: string): Promise<void> {
 /**
  * List file paths under `dir` recursively, relative to `dir`.
  * Skips node_modules, .git, dist, .demo2project, common heavy/tool dirs.
+ *
+ * Walks shallow-first: every directory's own files are pushed BEFORE
+ * recursing into subdirectories. This guarantees that shallow markers
+ * (book.toml, package.json, Cargo.toml, pyproject.toml at the root)
+ * always make it into the result, even on repos like rust-lang/book where
+ * a single deep directory (listings/) could otherwise exhaust the cap
+ * before sibling files at the same depth get a chance.
  */
 export async function listFiles(dir: string, maxFiles = 2000): Promise<string[]> {
   const skip = new Set([
@@ -57,16 +64,24 @@ export async function listFiles(dir: string, maxFiles = 2000): Promise<string[]>
     } catch {
       return;
     }
+    // Pass 1: push all files at this depth so siblings never lose to a
+    // sibling directory that fills the budget on its own.
+    const subdirs: { abs: string; rel: string }[] = [];
     for (const e of entries) {
       if (skip.has(e.name)) continue;
       const childRel = rel ? path.join(rel, e.name) : e.name;
       const childAbs = path.join(current, e.name);
-      if (e.isDirectory()) {
-        await walk(childAbs, childRel);
-      } else if (e.isFile()) {
+      if (e.isFile()) {
         out.push(childRel);
         if (out.length >= maxFiles) return;
+      } else if (e.isDirectory()) {
+        subdirs.push({ abs: childAbs, rel: childRel });
       }
+    }
+    // Pass 2: recurse into directories.
+    for (const sub of subdirs) {
+      if (out.length >= maxFiles) return;
+      await walk(sub.abs, sub.rel);
     }
   }
   await walk(dir, '');

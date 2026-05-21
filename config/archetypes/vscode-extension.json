@@ -1,0 +1,21 @@
+{
+  "id": "vscode-extension",
+  "name": "VS Code extension",
+  "description": "VS Code extension — package.json with vscode:prepublish script, .vscodeignore, or activationEvents/contributes.",
+  "recommended_standard": "typescript-library",
+  "applicable_qa_patterns": [
+    "verification_failure/build_failed",
+    "project_structure_failure/missing_entrypoint"
+  ],
+  "risk_profile": "medium",
+  "threshold": 0.5,
+  "signals": [
+    { "type": "file_exists",         "path": "package.json",                                              "weight": 2, "label": "package.json" },
+    { "type": "pkg_script_matches",  "pattern": "vscode:prepublish|vsce\\s+package",                     "weight": 5, "label": "pkg.scripts:vscode:prepublish/vsce package" },
+    { "type": "file_exists",         "path": ".vscodeignore",                                            "weight": 4, "label": ".vscodeignore" },
+    { "type": "pkg_field",           "field": "contributes",                                             "weight": 3, "label": "pkg.contributes" },
+    { "type": "pkg_field",           "field": "activationEvents",                                        "weight": 3, "label": "pkg.activationEvents" },
+    { "type": "pkg_dep",             "dep": "@types/vscode",                                             "weight": 2, "label": "dep:@types/vscode" },
+    { "type": "file_glob",           "pattern": "**/vsc-extension-quickstart.md",                        "weight": 2, "label": "vsc-extension-quickstart.md" }
+  ]
+}

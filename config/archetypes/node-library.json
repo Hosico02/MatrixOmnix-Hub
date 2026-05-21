@@ -1,7 +1,7 @@
 {
   "id": "node-library",
   "name": "Node / TypeScript library (npm-publishable)",
-  "description": "Library published to npm — has main/module/exports/types, no bin, no app framework deps.",
+  "description": "Library published to npm — has main/module/exports/types or a root index entry, no bin, no app framework deps.",
   "recommended_standard": "typescript-library",
   "applicable_qa_patterns": [
     "verification_failure/typecheck_failed",
@@ -9,13 +9,15 @@
     "test_quality_failure/empty_test"
   ],
   "risk_profile": "low",
-  "threshold": 0.5,
+  "threshold": 0.45,
   "signals": [
     { "type": "file_exists", "path": "package.json",                            "weight": 5, "label": "package.json" },
     { "type": "pkg_field",   "field": "main",                                   "weight": 2, "label": "pkg.main" },
     { "type": "pkg_field",   "field": "module",                                 "weight": 2, "label": "pkg.module" },
     { "type": "pkg_field",   "field": "exports",                                "weight": 2, "label": "pkg.exports" },
     { "type": "pkg_field",   "field": "types",                                  "weight": 1, "label": "pkg.types" },
+    { "type": "file_exists", "path": "index.js",                                "weight": 2, "label": "index.js (root)" },
+    { "type": "file_exists", "path": "index.ts",                                "weight": 2, "label": "index.ts (root)" },
     { "type": "pkg_field",   "field": "bin",                                    "weight": -5, "label": "penalty:bin (CLI)" },
     { "type": "pkg_dep",     "dep": "react",                                    "weight": -3, "label": "penalty:react" },
     { "type": "pkg_dep",     "dep": "next",                                     "weight": -3, "label": "penalty:next" },
