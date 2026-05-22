@@ -1,8 +1,0 @@
-{
-  "name": "stress-desktop-demo",
-  "private": true,
-  "type": "module",
-  "dependencies": {
-    "electron": "^39.0.0"
-  }
-}
