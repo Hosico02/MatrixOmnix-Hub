@@ -2,8 +2,10 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import type { DetectArchetypeArgs, DetectArchetypeOutput, VerifyProjectArgs } from './tools.js';
+import type { DetectArchetypeArgs, DetectArchetypeOutput, VerifyProjectArgs, VerifyProjectOutput } from './tools.js';
 import { detectArchetype } from '../core/projectArchetypeDetector.js';
+import { AnalyzerAgent } from '../agents/AnalyzerAgent.js';
+import { QACaseStore } from '../qa/QACaseStore.js';
 
 const server = new Server(
   { name: 'd2p-verify', version: '0.1.0' },
@@ -77,8 +79,59 @@ export async function runDetectArchetypeImpl(projectPath: string): Promise<Detec
   };
 }
 
-export async function runVerifyImpl(_projectPath: string, _hint?: string): Promise<unknown> {
-  throw new Error('verify_project not yet wired');
+export async function runVerifyImpl(projectPath: string, _hint?: string): Promise<VerifyProjectOutput> {
+  const analyzer = new AnalyzerAgent();
+  const { gap, score } = await analyzer.fullAnalyze(projectPath);
+  const archetype = gap.project_snapshot.detected_archetype ?? null;
+
+  const rawFindings = (gap.findings ?? []) as Array<{
+    category: string;
+    severity: string;
+    message?: string;
+    suggested_fix?: string;
+    related_files?: string[];
+  }>;
+  const findings = rawFindings.map((f) => ({
+    category: f.category,
+    severity: f.severity,
+    message: f.message ?? f.category,
+    suggested_fix: f.suggested_fix,
+    evidence: f.related_files && f.related_files.length > 0 ? f.related_files.join(', ') : undefined,
+  }));
+
+  const blockerCount = findings.filter((f) => f.severity === 'blocker').length;
+  const highCount = findings.filter((f) => f.severity === 'high').length;
+  const verdict: VerifyProjectOutput['verdict'] = blockerCount > 0 ? 'fail'
+    : highCount > 0 ? 'needs_repair'
+      : 'pass';
+
+  // Load persisted QA cases for preflight warnings. The full preflight pipeline
+  // (event store, transferability evaluator) requires more orchestration than
+  // a single-shot verify call should carry; the read-only on-disk view is the
+  // honest minimum here.
+  let qaActive: Array<{ fingerprint: string; frequency: number; last_seen: string }> = [];
+  try {
+    const cases = await new QACaseStore(projectPath).loadCases();
+    qaActive = cases
+      .filter((c) => c.status === 'active')
+      .map((c) => ({ fingerprint: c.fingerprint, frequency: c.frequency, last_seen: c.last_seen_at }));
+  } catch {
+    qaActive = [];
+  }
+
+  return {
+    archetype: archetype
+      ? { id: String(archetype.id), confidence: archetype.confidence }
+      : { id: 'unknown', confidence: 0 },
+    score: Math.round(score.total),
+    verdict,
+    findings,
+    evidence: {
+      build_status: 'not_run',
+      type_check_status: 'not_run',
+    },
+    qa_preflight: { active_cases: qaActive },
+  };
 }
 
 async function main(): Promise<void> {
