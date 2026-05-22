@@ -1,69 +1,24 @@
 import type { IterationEvent, QACase } from '../core/types.js';
 
 /**
- * MemoryAgent: short, structured memory across iterations.
- *
- * Responsibilities (MVP):
- *  - Compute fingerprints for failure events so QA can dedup.
- *  - Count how often a fingerprint has been seen.
- *  - Detect "same failure repeating across iterations".
- *
- * Stays in-process (no DB). Persistence is handled by QACaseStore.
+ * Minimal in-memory frequency tracker for QA cases. The verifier-pivot
+ * build no longer ships the full cross-iteration memory subsystem; this
+ * stub exists so the QAAgent constructor seam continues to work for
+ * tests and any in-process callers that want a fingerprint-frequency
+ * counter without a persistence layer.
  */
 export class MemoryAgent {
-  private fingerprintCounts = new Map<string, number>();
-  private fingerprintLastIteration = new Map<string, string>();
+  private counts = new Map<string, number>();
 
-  ingest(events: IterationEvent[]): void {
-    for (const ev of events) {
-      const fp = fingerprintForEvent(ev);
-      if (!fp) continue;
-      this.fingerprintCounts.set(fp, (this.fingerprintCounts.get(fp) ?? 0) + 1);
-      this.fingerprintLastIteration.set(fp, ev.iteration_id);
-    }
+  /** Record raw iteration events. No-op in the verifier build. */
+  ingest(_events: IterationEvent[]): void {
+    /* no-op */
   }
 
-  countOf(fingerprint: string): number {
-    return this.fingerprintCounts.get(fingerprint) ?? 0;
+  /** Bump and return the case's frequency in this in-memory tracker. */
+  bumpFrequency(c: QACase): QACase {
+    const next = (this.counts.get(c.fingerprint) ?? 0) + 1;
+    this.counts.set(c.fingerprint, next);
+    return { ...c, frequency: Math.max(c.frequency ?? 0, next) };
   }
-
-  isRecurring(fingerprint: string, threshold = 2): boolean {
-    return this.countOf(fingerprint) >= threshold;
-  }
-
-  /** Combine memory-derived frequency with a freshly-built QA case. */
-  bumpFrequency(caseObj: QACase): QACase {
-    const fp = caseObj.fingerprint;
-    const fromMemory = this.countOf(fp);
-    if (fromMemory > caseObj.frequency) {
-      return { ...caseObj, frequency: fromMemory };
-    }
-    return caseObj;
-  }
-}
-
-/**
- * Stable fingerprint for failure-shaped events. Stays category-level —
- * we explicitly do NOT include timestamps, ids, or file paths so that the
- * "same kind of bug" hashes to the same value across iterations.
- */
-export function fingerprintForEvent(ev: IterationEvent): string | null {
-  if (ev.event_type === 'verification_failed') {
-    return `verification_failed:${normalizeCommand(ev.command ?? '')}`;
-  }
-  if (ev.event_type === 'task_failed') {
-    return `task_failed:${ev.metadata?.['rule'] ?? 'unspecified'}`;
-  }
-  if (ev.event_type === 'review_finding' && ev.metadata?.['rule']) {
-    return `review:${String(ev.metadata['rule'])}`;
-  }
-  if (ev.event_type === 'qa_case_created' && ev.metadata?.['fingerprint']) {
-    return String(ev.metadata['fingerprint']);
-  }
-  return null;
-}
-
-function normalizeCommand(cmd: string): string {
-  // strip arguments after the binary, collapse whitespace
-  return cmd.trim().split(/\s+/).slice(0, 2).join(' ').toLowerCase();
 }

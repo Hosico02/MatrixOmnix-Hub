@@ -15,9 +15,10 @@ import path from 'node:path';
 import { shortId } from '../utils/time.js';
 import { evaluateScoreGate } from './scoreGate.js';
 import { gradeProjectScore } from './projectScorer.js';
-import { loadMarketResearchReport } from '../research/MarketResearchAgent.js';
-import { analyzeMarketResearchGaps } from './marketGapAnalyzer.js';
-import { loadOfficialModelCatalog, type OfficialModelCatalog } from '../research/OfficialModelCatalog.js';
+// market-research / official-model-catalog imports removed as part of the
+// verifier pivot. Those modules belonged to the do-layer research stage that
+// is now external to MatrixOmnix.
+type OfficialModelCatalog = null;
 import { detectDeliverySurfaces, requiresSurfaceContractMatrix } from './deliverySurfaceDetector.js';
 
 function finding(
@@ -1124,7 +1125,7 @@ export async function analyzeGaps(
         ),
       );
     }
-    const officialModelCatalog = await loadOfficialModelCatalog(snapshot.project_path);
+    const officialModelCatalog: OfficialModelCatalog = null;
     if (hasLlmProviderCatalogOutdatedAgainstOfficialRefresh(llmConfigText, officialModelCatalog)) {
       findings.push(
         finding(
@@ -1394,12 +1395,8 @@ export async function analyzeGaps(
     }
   }
 
-  const marketResearchReport = await loadMarketResearchReport(snapshot.project_path);
-  if (marketResearchReport) {
-    const marketGaps = await analyzeMarketResearchGaps(snapshot.project_path, files, marketResearchReport);
-    findings.push(...marketGaps.findings);
-    productMaturity = mergeProductMaturity(productMaturity, marketGaps.product_maturity);
-  }
+  // market-research integration removed in the verifier pivot — the do-layer
+  // owns research now and feeds verified projects to MatrixOmnix afterwards.
   await addBehavioralDepthFindings(findings, snapshot, files, pkg);
   addVerificationFailureFindings(findings, snapshot, score);
 
@@ -2671,14 +2668,9 @@ function hasLlmProviderCatalogMissingOfficialModels(templateText: string, llmCon
   return !exposesModelChoices || !citesOfficialSources;
 }
 
-function hasLlmProviderCatalogOutdatedAgainstOfficialRefresh(llmConfigText: string, catalog: OfficialModelCatalog | null): boolean {
-  if (!catalog) return false;
-  if (!/public_provider_config\s*\(|\bPROVIDER_PRESETS\b|\bproviders\b/.test(llmConfigText)) return false;
-  for (const provider of catalog.providers) {
-    if (provider.id === 'custom') continue;
-    if (!provider.default_model || provider.models.length === 0) continue;
-    if (!llmConfigText.includes(provider.default_model)) return true;
-  }
+function hasLlmProviderCatalogOutdatedAgainstOfficialRefresh(_llmConfigText: string, _catalog: OfficialModelCatalog | null): boolean {
+  // No official model catalog source in the verifier-only build — the do-layer
+  // owns the catalog refresh now. This gate can never fire.
   return false;
 }
 

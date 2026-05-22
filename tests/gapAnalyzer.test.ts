@@ -5,8 +5,6 @@ import { promises as fs } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { AnalyzerAgent } from '../src/agents/AnalyzerAgent.js';
 import { analyzeGaps, auditAgentMisjudgments } from '../src/core/gapAnalyzer.js';
-import { writeMarketResearchReport } from '../src/research/MarketResearchAgent.js';
-import type { MarketResearchReport } from '../src/research/types.js';
 import { takeSnapshot } from '../src/core/projectSnapshot.js';
 import type { ProjectScore, ProjectSnapshot } from '../src/core/types.js';
 import { selectStandardForSnapshot } from '../src/standards/standardsLibrary.js';
@@ -1662,43 +1660,6 @@ describe('gapAnalyzer', () => {
     expect(gap.score.score_gate?.failures.some((f) => f.gate === 'product_maturity')).not.toBe(true);
   });
 
-  it('adds source-cited market research gaps when a research report exists', async () => {
-    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-research-gap-integration-'));
-    await fs.writeFile(path.join(dir, 'README.md'), '# UI Demo\n\nA small visual demo.\n' + 'x'.repeat(240));
-    await fs.writeFile(path.join(dir, 'package.json'), JSON.stringify({
-      scripts: { build: 'node -e "console.log(1)"' },
-      dependencies: { vue: '^3.0.0' },
-    }));
-    await fs.writeFile(path.join(dir, 'index.html'), '<div id="app"></div>\n');
-    const report: MarketResearchReport = {
-      schema_version: 1,
-      generated_at: new Date(0).toISOString(),
-      project_path: dir,
-      domain: 'web_ui_app',
-      query: 'production web UI competitors',
-      search_provider: 'fixture',
-      copy_policy: 'Use competitor material only to extract capabilities; do not copy names, text, UI, code, or brand assets.',
-      sources: [{ title: 'UI benchmark', url: 'https://example.com/ui', retrieved_at: new Date(0).toISOString(), snippet: 'Responsive accessible UI.' }],
-      capabilities: [{
-        id: 'responsive_accessible_ui',
-        label: 'Responsive and accessible UI',
-        description: 'Keyboard, touch, responsive layout and semantic labels.',
-        importance: 'required',
-        source_urls: ['https://example.com/ui'],
-        local_evidence_patterns: ['aria-', '@media', 'focus-visible'],
-      }],
-      risks: [],
-      confidence: 'medium',
-    };
-    await writeMarketResearchReport(dir, report);
-
-    const { gap } = await new AnalyzerAgent().fullAnalyze(dir);
-    const finding = gap.findings.find((f) => f.category === 'below_market_research_parity');
-
-    expect(finding?.message).toContain('Responsive and accessible UI');
-    expect(gap.product_maturity?.references).toContain('https://example.com/ui');
-    expect(gap.score.score_gate?.failures.some((f) => f.gate === 'product_maturity')).toBe(true);
-  });
 
   it('flags LLM web demos that require a server-wide API key instead of player-supplied provider config', async () => {
     const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-llm-provider-config-gap-'));
@@ -1878,48 +1839,6 @@ describe('gapAnalyzer', () => {
     const categories = gap.findings.map((f) => f.category);
 
     expect(categories).toContain('llm_provider_catalog_missing_official_models');
-  });
-
-  it('flags LLM provider catalogs stale against a refreshed official model catalog', async () => {
-    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-llm-stale-model-catalog-gap-'));
-    await fs.mkdir(path.join(dir, 'templates'), { recursive: true });
-    await fs.mkdir(path.join(dir, '.demo2project', 'research'), { recursive: true });
-    await fs.writeFile(path.join(dir, 'README.md'), '# LLM Demo\n\nA browser LLM demo.\n' + 'x'.repeat(420));
-    await fs.writeFile(path.join(dir, 'requirements.txt'), 'flask>=3.0.0\npytest>=8.0.0\n');
-    await fs.writeFile(path.join(dir, 'app.py'), 'from flask import Flask\napp = Flask(__name__)\n');
-    await fs.writeFile(path.join(dir, '.demo2project', 'research', 'llm-model-catalog.json'), JSON.stringify({
-      schema_version: 1,
-      generated_at: new Date(0).toISOString(),
-      providers: [{
-        id: 'openai',
-        label: 'OpenAI',
-        base_url: 'https://api.openai.com/v1',
-        default_model: 'gpt-5.4-mini',
-        models: ['gpt-5.5', 'gpt-5.4', 'gpt-5.4-mini'],
-        source_url: 'https://platform.openai.com/docs/models',
-        source_name: 'OpenAI official model docs',
-        source_kind: 'official_docs_snapshot',
-        retrieved_at: new Date(0).toISOString(),
-      }],
-      warnings: [],
-    }, null, 2));
-    await fs.writeFile(path.join(dir, 'llm_config.py'), [
-      'def public_provider_config():',
-      '    return {"providers": [',
-      '        {"id": "deepseek", "label": "DeepSeek", "base_url": "https://api.deepseek.com", "default_model": "deepseek-v4-flash", "models": ["deepseek-v4-flash"], "source_url": "https://api-docs.deepseek.com/api/list-models"},',
-      '        {"id": "minimax", "label": "MiniMax", "base_url": "https://api.minimax.io/v1", "default_model": "MiniMax-M2.7", "models": ["MiniMax-M2.7"], "source_url": "https://platform.minimax.io/docs/guides/text-generation"},',
-      '        {"id": "qwen", "label": "Qwen", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1", "default_model": "qwen3.6-plus", "models": ["qwen3.6-plus"], "source_url": "https://www.alibabacloud.com/help/en/model-studio/text-generation-model"},',
-      '        {"id": "openai", "label": "OpenAI", "base_url": "https://api.openai.com/v1", "default_model": "gpt-5-mini", "models": ["gpt-5-mini", "gpt-5.2"], "source_url": "https://platform.openai.com/docs/models"},',
-      '        {"id": "custom", "label": "Custom", "base_url": "", "default_model": "", "models": []},',
-      '    ], "requires_player_key": True}',
-      '',
-    ].join('\n'));
-    await fs.writeFile(path.join(dir, 'templates', 'index.html'), '<select id="llmProvider"></select><select id="llmModel"></select>\n');
-
-    const { gap } = await new AnalyzerAgent().fullAnalyze(dir);
-    const categories = gap.findings.map((f) => f.category);
-
-    expect(categories).toContain('llm_provider_catalog_outdated_against_official_refresh');
   });
 
   it('flags API projects without a contract/runtime harness', async () => {
