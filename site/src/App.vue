@@ -31,162 +31,165 @@
             </div>
 
             <p class="subcopy">
-              The verifier for demo-to-product pipelines. A read-only MCP server (<code>d2p-verify</code>) any agent — d2p, Claude Code, Cursor, custom — can call to get an honest archetype detection, gap report, evidence-weighted score and QA preflight on a project directory. MatrixOmnix never writes; it only inspects, scores and reports.
+              MatrixOmnix turns a rough demo into a verified product. Two subsystems work together: <strong>d2p</strong> drives the demo through analyzer / planner / parallel executors / QA to fill the gaps, and an independent <strong>verify-layer</strong> returns an honest archetype detection, evidence-weighted score and gap report after every iteration. Currently two repos by design; eventual merger if the split keeps paying off.
             </p>
           </div>
         </section>
 
-        <section class="panel-grid" aria-label="MatrixOmnix capability panels">
-          <FlipPanel id="detect" title="Detect" :active="flippedPanels.has('detect')" @open="flipOn" @close="flipOff">
-            <code>detect_archetype(path)</code> returns the primary archetype with confidence, detected signals and top-3 alternatives. Hybrid declarative JSON + built-in probes; 13/14 hit rate on unfamiliar GitHub repos.
+        <section class="panel-grid" aria-label="MatrixOmnix subsystems">
+          <FlipPanel id="do" title="Do · d2p" :active="flippedPanels.has('do')" @open="flipOn" @close="flipOff">
+            LLM-driven Python orchestrator: Analyzer searches the web for mature competitor products, Planner diffs them against the demo, parallel Executors fill the gaps, QA emits failing tests as permanent regression guardrails. No hardcoded demo-type detectors.
           </FlipPanel>
-          <FlipPanel id="verify" title="Verify" :active="flippedPanels.has('verify')" @open="flipOn" @close="flipOff">
-            <code>verify_project(path)</code> returns archetype, evidence-weighted score, verdict (pass / needs_repair / fail), severity-tagged findings, evidence summary and QA preflight in one envelope. Read-only.
+          <FlipPanel id="verify" title="Verify · this repo" :active="flippedPanels.has('verify')" @open="flipOn" @close="flipOff">
+            Read-only MCP server (<code>d2p-verify</code>) that any agent can call between iterations. Returns archetype, evidence-weighted score, verdict (pass / needs_repair / fail), severity-tagged findings and QA preflight in one envelope. Never writes to the project.
           </FlipPanel>
-          <FlipPanel id="integrate" title="Integrate" :active="flippedPanels.has('integrate')" @open="flipOn" @close="flipOff">
-            Stdio MCP transport. Add to <code>.mcp.json</code> for Claude Code / Cursor, or shell out from any orchestrator. Pair with d2p (recommended do-layer) for a full demo → verified product loop.
+          <FlipPanel id="goal" title="Goal · demo → product" :active="flippedPanels.has('goal')" @open="flipOn" @close="flipOff">
+            One closed loop: d2p produces a change, MatrixOmnix verifies it, d2p iterates again if the verdict is <code>needs_repair</code>. The endgame is a single tool that does both — kept split today so the verify-layer can stay genuinely independent.
           </FlipPanel>
         </section>
 
-        <section class="sibling-card" aria-label="Recommended do-layer d2p">
+        <section class="sibling-card" aria-label="Two subsystems, one loop">
           <div class="sibling-card__body">
-            <div class="sibling-card__kicker">Recommended do-layer</div>
+            <div class="sibling-card__kicker">Two subsystems, one loop</div>
             <h2 class="sibling-card__title">
-              <a href="https://github.com/Hosico02/d2p" target="_blank" rel="noopener">d2p</a>
-              — produces changes; MatrixOmnix verifies them
+              How <a href="https://github.com/Hosico02/d2p" target="_blank" rel="noopener">d2p</a> and the verify-layer hand off
             </h2>
             <p class="sibling-card__copy">
-              MatrixOmnix is read-only. Pair it with a do-layer that <em>can</em> mutate the project. d2p is an LLM-driven Python orchestrator (Analyzer → Planner → parallel Executors → QA) with <strong>no hardcoded demo-type detectors</strong>: its Analyzer searches the web for mature competitor products, a Planner diffs them against your demo, and parallel Executors fill the gaps. After each iteration, hand the project to MatrixOmnix for an independent archetype + gap + score verdict.
+              The do-layer and the verify-layer are deliberately kept in separate repos right now. The verify-layer must be able to call the do-layer a liar, so it cannot share code with it. Each iteration: d2p reads the demo, plans a small batch of tasks, runs parallel Executors, generates failing tests as permanent regression guardrails. Then it hands the project state to the verify-layer's <code>verify_project</code> MCP call, which returns an independent verdict. If verdict is <code>pass</code>, the loop terminates; if <code>needs_repair</code>, d2p plans the next iteration; if <code>fail</code>, the run is escalated.
             </p>
             <ul class="sibling-card__bullets">
-              <li><strong>~8k LOC Python</strong> with no hardcoded gap detectors or fixture catalogue</li>
-              <li>MiniMax, Claude, Codex or Claude CLI via a per-role model router</li>
-              <li>Health snapshot + baseline-test rollback prevents silent regressions</li>
-              <li>Failing tests stay in <code>tests/d2p_qa/</code> as a permanent regression corpus</li>
-              <li>Any MCP client can call MatrixOmnix — d2p, Claude Code, Cursor, custom</li>
+              <li><strong>d2p</strong> · ~8k LOC Python · LLM-driven, no hardcoded demo-type detectors · MiniMax / Claude / Codex / Claude CLI</li>
+              <li><strong>verify-layer</strong> · ~12k LOC TypeScript · 80+ engineered gap detectors · MCP stdio server · deterministic</li>
+              <li><strong>integration</strong> · MCP over stdio; <code>.mcp.json</code> wiring or subprocess JSON-RPC</li>
+              <li><strong>endgame</strong> · merge into a single MatrixOmnix tool if the split keeps proving valuable across more domains</li>
+              <li><strong>or</strong> · drop the verify-layer entirely if d2p's LLM-driven loop closes the demo-to-product gap on its own</li>
             </ul>
             <p class="sibling-card__pair">
-              d2p and MatrixOmnix are complementary by design: d2p is the do-layer (changes the project), MatrixOmnix is the verify-layer (returns yes/no with evidence). Neither competes with the other.
+              The decision will be data-driven, not aesthetic. Which subsystem catches the bug each repo couldn't catch alone is the question that decides the architecture.
             </p>
             <a class="sibling-card__cta" href="https://github.com/Hosico02/d2p" target="_blank" rel="noopener">
-              View Hosico02/d2p on GitHub →
+              View d2p on GitHub →
             </a>
           </div>
         </section>
       </template>
 
       <section v-else-if="page === 'about'" class="content-page about-page" id="about">
-        <PageHeading kicker="About" title="The verifier for demo-to-product pipelines.">
-          MatrixOmnix is the read-only verify-layer of a two-part architecture. A separate do-layer (d2p, Claude Code, Cursor, custom) produces changes; MatrixOmnix gives an independent verdict — archetype, evidence-weighted score, gap findings, QA preflight — via an MCP stdio server any agent can call.
+        <PageHeading kicker="About" title="MatrixOmnix is a goal, not yet a single tool.">
+          The goal: turn a rough demo into a verified product. The current implementation: <strong>d2p</strong> (LLM-driven Python orchestrator that produces changes) plus a separate <strong>verify-layer</strong> (TypeScript MCP server that returns an independent verdict). Two repos today, deliberately. If the split keeps paying off, they merge. If d2p alone closes the gap, the verify-layer is dropped. The decision is empirical, not architectural.
         </PageHeading>
 
-        <div class="image-grid" aria-label="MatrixOmnix verifier diagrams">
+        <div class="image-grid" aria-label="MatrixOmnix architecture diagrams">
           <figure>
-            <img src="./assets/framework-loop.png" alt="MatrixOmnix verifier flow: any MCP client calls d2p-verify; the server runs AnalyzerAgent which produces a project snapshot, then ProjectScorer and gapAnalyzer, then a QA preflight." />
-            <figcaption>Verifier flow · MCP client → d2p-verify → archetype + gap + score + QA</figcaption>
+            <img src="./assets/framework-loop.png" alt="MatrixOmnix two-subsystem loop: d2p's Analyzer plans changes, Executors apply them, QA emits failing tests; then the project state is handed to the verify-layer's verify_project MCP call which returns archetype, score, verdict and gap findings. d2p reads the verdict to decide whether to iterate again." />
+            <figcaption>Two subsystems · d2p produces, verify-layer judges</figcaption>
           </figure>
           <figure>
             <img src="./assets/harness-map.png" alt="MatrixOmnix harness coverage map: every product surface gated across three honest tiers — structural contract (always-on), behavioural runtime (skips when the surface's runtime lib is absent), and productization surface (operational maturity gates above runtime)." />
             <figcaption>3 tiers · structural · behavioural · productization</figcaption>
           </figure>
           <figure>
-            <img src="./assets/deployment-flow.png" alt="MatrixOmnix shipping plan: Phase A ships the two MCP tools and the back-compat CLI today; Phase B candidates (trust_check, qa_regression_replay, report_project, compare_runs) wait on real consumer demand." />
-            <figcaption>Phase A shipped · Phase B candidates parked</figcaption>
+            <img src="./assets/deployment-flow.png" alt="MatrixOmnix endgame: two repos today, one tool eventually. Either d2p absorbs the verify-layer (if independent verification keeps catching real bugs) or d2p stands alone as MatrixOmnix (if its own QA corpus covers the same failure modes)." />
+            <figcaption>Endgame · merge or absorb · decided by which subsystem catches the bug</figcaption>
           </figure>
         </div>
 
         <section class="about-narrative" aria-label="MatrixOmnix overview">
           <article>
-            <h2>Why it exists</h2>
+            <h2>Why two subsystems</h2>
             <p>
-              Coding agents are good at producing code; they are systematically bad at independently verifying that the code actually became a maintainable project. AI agents skip verification, claim completion without evidence, reintroduce yesterday's bug, and ship READMEs that lie about what runs. MatrixOmnix is the part of the loop that refuses to take the agent's word for it — a separate process, with no write access, that says yes or no with evidence.
+              Coding agents are good at producing code; they are systematically bad at independently verifying that the code actually became a maintainable project. AI agents skip verification, claim completion without evidence, reintroduce yesterday's bug, and ship READMEs that lie about what runs. The verify-layer is the part of MatrixOmnix that refuses to take the do-layer's word for it — a separate process, with no write access, that says yes or no with evidence. It must not share code with the do-layer it judges. So: two repos, two stacks, one product goal.
             </p>
           </article>
           <article>
-            <h2>How it works</h2>
+            <h2>What d2p does</h2>
             <p>
-              MatrixOmnix exposes two MCP tools over stdio. <code>verify_project(path)</code> returns a single envelope: <code>archetype</code>, <code>score</code> (0..100, evidence-weighted), <code>verdict</code> (pass / needs_repair / fail), <code>findings</code> (severity-sorted), <code>evidence</code> summary, and <code>qa_preflight</code> (known-recurring fingerprints). <code>detect_archetype(path)</code> is a cheaper archetype-only path. The do-layer (d2p, Claude Code, …) calls these between iterations and decides whether to keep going.
+              d2p (the do-layer) is an LLM-driven Python orchestrator. Its Analyzer reads the demo and searches the web for mature competitor products. Its Planner diffs them against the demo and emits a small batch of file-level tasks. Parallel Executors apply changes under a sandbox with health-rollback and baseline-test guards. Its QA agent emits failing tests as bug reports that stay in <code>tests/d2p_qa/</code> as a permanent regression corpus, so each iteration grows the safety net.
             </p>
           </article>
           <article>
-            <h2>What it gates</h2>
+            <h2>What the verify-layer does</h2>
             <p>
-              Every product surface is gated across three honest tiers: tier-1 structural contract (always-on source-shape checks), tier-2 behavioural runtime (exercises the surface end-to-end; honestly skip-with-diagnostic when the runtime lib is absent), tier-3 productization surface (operational gates above runtime — error envelope, prompt-eval harness, provider failure fallback, token budget, prompt template registry, streaming response). Project archetype is decided by a hybrid of declarative JSON probes and built-in TypeScript probes; the real-project bench classifies 13 of 14 unfamiliar GitHub repos correctly.
+              The verify-layer (this repo) is a read-only MCP stdio server (<code>d2p-verify</code>). It exposes two tools: <code>verify_project(path)</code> returns archetype, evidence-weighted score, verdict (pass / needs_repair / fail), severity-tagged findings, evidence summary and QA preflight in one envelope; <code>detect_archetype(path)</code> is a cheaper archetype-only path. Project archetype is decided by a hybrid of declarative JSON probes and built-in TypeScript probes; the real-project bench classifies 13 of 14 unfamiliar GitHub repos correctly.
             </p>
           </article>
           <article>
-            <h2>What it explicitly does not do</h2>
+            <h2>How they will collapse (or not)</h2>
             <p>
-              No writes to the project under verification. No HTTP transport — stdio only. No multi-tenancy, auth or billing. No hosted upload-and-return service. No claim that a high internal score replaces human review. Those boundaries are the design's point: a verifier that mutates state or speaks a richer protocol is not independent.
+              The endgame is a single MatrixOmnix tool. We keep them split today only because we don't yet know which subsystem deserves to absorb the other. If the verify-layer keeps catching bugs that d2p's own QA missed, d2p absorbs the verifier and we ship one combined tool. If d2p's growing regression corpus covers everything the verify-layer was catching, the verify-layer is retired and d2p stands alone as MatrixOmnix. The decision will be data-driven from real cross-project runs.
             </p>
           </article>
         </section>
 
-        <section class="text-grid" aria-label="Phase A and Phase B">
+        <section class="text-grid" aria-label="Current shape and endgame">
           <article>
-            <h2>Phase A · shipped</h2>
+            <h2>Current shape</h2>
             <p>
-              Two MCP tools (<code>verify_project</code>, <code>detect_archetype</code>) plus a thin back-compat CLI. Built on the existing archetype detector, gap analyzer (80+ finding categories), evidence-weighted scorer, and QA case store. The do-layer (RuleBasedExecutor, iterate command, long-horizon autonomy, advisory agents, ~60 do-layer CLI commands) was surgically removed in the pivot: ~41k LOC → ~12k LOC, 752 vitest tests → 219, all passing. Pre-pivot state preserved at git tag <code>v0.0.6-final</code>.
+              Two repos under the MatrixOmnix umbrella: <code>Hosico02/d2p</code> (the do-layer, ~8k LOC Python) and <code>Hosico02/demo2project</code> (the verify-layer, ~12k LOC TypeScript). Both open source. Both independently testable. The verify-layer's vitest suite reports 219/219 passing; d2p's QA corpus grows per run. They communicate over MCP stdio — no shared state, no shared imports.
             </p>
           </article>
           <article>
-            <h2>Phase B · parking lot</h2>
+            <h2>Endgame</h2>
             <p>
-              Not pre-built. Each candidate has a graduation criterion driven by real consumer signal: <code>trust_check</code> (when verify passes but README lies, observed ≥ 2×), <code>qa_regression_replay</code> (when cross-project fingerprint reuse occurs), <code>report_project</code> (when JSON isn't enough for a consumer), <code>compare_runs</code> (when a downstream orchestrator wants the verifier to drive termination). HTTP transport, multi-tenancy, hosted upload — explicitly never.
+              Merge or absorb, decided by which subsystem catches the bug. The branch <code>v0.0.6-final</code> on the verify-layer preserves the pre-pivot state in case we need to fold do-layer code back in. The path of least regret: keep them honestly independent until real cross-project data shows one approach dominates.
             </p>
           </article>
         </section>
 
         <a class="repo-link" href="https://github.com/Hosico02/demo2project" target="_blank" rel="noreferrer">
-          Open source repository: github.com/Hosico02/demo2project
+          Verify-layer repository: github.com/Hosico02/demo2project
         </a>
       </section>
 
       <section v-else-if="page === 'service'" class="content-page service-page" id="service">
-        <PageHeading kicker="Service" title="How to integrate MatrixOmnix.">
-          MatrixOmnix is a read-only verifier that runs as a local MCP stdio server (<code>d2p-verify</code>) plus a back-compat CLI. There is no hosted service. Pick the path that matches your client.
+        <PageHeading kicker="Service" title="How to run MatrixOmnix today.">
+          MatrixOmnix is two open-source repos, not a hosted service. Run d2p locally to drive the demo through analyzer / planner / executors / QA, and run the verify-layer (this repo) as a local MCP stdio server that d2p — or any other agent — calls between iterations.
         </PageHeading>
 
         <section class="service-layout" data-service-guide>
           <article class="usage-card">
-            <h2>Install</h2>
+            <h2>Install both subsystems</h2>
             <p>
-              MatrixOmnix is a single Node package. Clone, install, build — that's it. The server is invoked over stdio so there's no port to configure and no daemon to keep alive.
+              Two independent repos, two install steps. d2p is Python; the verify-layer is Node. The verify-layer ships an MCP stdio server (<code>d2p-verify</code>) and a back-compat CLI (<code>matrixomnix archetype</code>, <code>matrixomnix gap</code>, …).
             </p>
+            <code># do-layer</code>
+            <code>git clone https://github.com/Hosico02/d2p && cd d2p</code>
+            <code>python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt</code>
+            <code></code>
+            <code># verify-layer (separate clone)</code>
             <code>git clone https://github.com/Hosico02/demo2project</code>
-            <code>cd demo2project && pnpm install</code>
-            <code>pnpm build</code>
+            <code>cd demo2project && pnpm install && pnpm build</code>
             <code>pnpm matrixomnix archetype --project ./your-repo</code>
           </article>
 
           <ol class="usage-steps">
-            <li><strong>Path A · MCP client</strong><span>Add to your MCP client config (Claude Code's <code>.mcp.json</code>, Cursor's settings, etc.):<br /><code>{"mcpServers":{"d2p-verify":{"command":"node","args":["/abs/path/dist/mcp/server.js"]}}}</code><br />The client discovers <code>verify_project</code> and <code>detect_archetype</code> automatically.</span></li>
-            <li><strong>Path B · subprocess</strong><span>Any orchestrator (d2p, custom Python/Go/Rust) can spawn <code>node dist/mcp/server.js</code> and talk JSON-RPC over its stdio. The MCP protocol is documented at <code>spec.modelcontextprotocol.io</code>. d2p's optional post-iteration hook is downstream — not bundled here.</span></li>
-            <li><strong>Path C · CLI</strong><span>For one-off checks or CI: <code>pnpm matrixomnix archetype --project ./your-repo</code> for the cheap path, <code>pnpm matrixomnix gap --project ./your-repo</code> for the full gap report (evidence-weighted by default; add <code>--fast</code> for static-only).</span></li>
-            <li><strong>verify_project envelope</strong><span>Returns <code>{archetype, score, verdict, findings, evidence, qa_preflight}</code>. Verdict is <code>fail</code> if any finding is <code>blocker</code> severity, <code>needs_repair</code> if any <code>high</code>, else <code>pass</code>. Drive your do-layer's next iteration from this single value.</span></li>
-            <li><strong>Inspect interactively</strong><span>The MCP Inspector lets you call tools by hand to confirm the server is wired up correctly: <code>npx @modelcontextprotocol/inspector node dist/mcp/server.js</code>.</span></li>
+            <li><strong>1 · Drive the demo with d2p</strong><span>From the <code>d2p</code> repo: <code>python run.py /path/to/your/demo --iter 2 --parallel 2</code>. d2p's Analyzer fetches competitor research, Planner emits file-level Tasks, parallel Executors apply changes, QA emits failing tests as permanent regression guardrails. Artifacts land in <code>&lt;demo&gt;/.d2p/run-&lt;timestamp&gt;/</code>.</span></li>
+            <li><strong>2 · Verify between iterations</strong><span>After each d2p iteration, call the verify-layer's <code>verify_project</code> MCP tool. d2p adds a post-iteration hook that spawns <code>node /path/to/demo2project/dist/mcp/server.js</code> over stdio and reads the JSON envelope. If verdict is <code>pass</code>, the loop terminates; if <code>needs_repair</code>, d2p plans the next iteration; if <code>fail</code>, the run is escalated to a human.</span></li>
+            <li><strong>3 · Or wire the verifier into your editor</strong><span>The verify-layer is a standalone MCP server — Claude Code, Cursor, or any MCP-aware tool can call it directly. Add to <code>.mcp.json</code>:<br /><code>{"mcpServers":{"d2p-verify":{"command":"node","args":["/abs/path/demo2project/dist/mcp/server.js"]}}}</code><br />Then <code>verify_project</code> and <code>detect_archetype</code> show up as callable tools.</span></li>
+            <li><strong>4 · Or just use the CLI</strong><span>For one-off checks or CI without an agent: <code>pnpm matrixomnix archetype --project ./your-repo</code> for the cheap archetype-only path, <code>pnpm matrixomnix gap --project ./your-repo</code> for the full gap report (evidence-weighted by default; add <code>--fast</code> for static-only).</span></li>
+            <li><strong>5 · Inspect interactively</strong><span>The MCP Inspector lets you call verify-layer tools by hand to confirm the server is wired up correctly: <code>npx @modelcontextprotocol/inspector node /abs/path/demo2project/dist/mcp/server.js</code>.</span></li>
           </ol>
         </section>
 
-        <code class="command-strip">node dist/mcp/server.js  # d2p-verify stdio server</code>
+        <code class="command-strip">python run.py ./your-demo --iter 2  &amp;&amp;  node /abs/path/demo2project/dist/mcp/server.js</code>
         <p class="service-footnote">
-          Verifier never writes to the project under verification. Pair with a do-layer (<a href="https://github.com/Hosico02/d2p" target="_blank" rel="noopener">d2p</a> recommended) to produce changes, then call <code>verify_project</code> again.
+          Two repos, one product goal. If the split keeps proving valuable, they merge. If d2p's growing QA corpus covers everything the verify-layer catches, the verify-layer is retired. <a href="https://github.com/Hosico02/d2p" target="_blank" rel="noopener">d2p</a> · <a href="https://github.com/Hosico02/demo2project" target="_blank" rel="noopener">verify-layer</a>.
         </p>
       </section>
 
       <section v-else class="content-page contact-page" id="contact">
-        <PageHeading kicker="Contact" title="Pair MatrixOmnix with your do-layer.">
-          MatrixOmnix is open source. File issues, propose Phase B graduations, or share verify_project envelopes that surfaced real bugs in your pipeline. The recommended do-layer is d2p — link your demo there, verify here.
+        <PageHeading kicker="Contact" title="MatrixOmnix is two repos. Both are open.">
+          File issues, share verify_project envelopes that caught real bugs, or argue for or against the eventual merger. Both subsystems are independently testable; both grow per real-project run.
         </PageHeading>
 
         <div class="contact-grid">
-          <a href="https://github.com/Hosico02/demo2project" target="_blank" rel="noreferrer">
-            <span>Verifier · this repo</span>
-            <strong>github.com/Hosico02/demo2project</strong>
-          </a>
           <a href="https://github.com/Hosico02/d2p" target="_blank" rel="noreferrer">
-            <span>Recommended do-layer</span>
+            <span>Do-layer · d2p</span>
             <strong>github.com/Hosico02/d2p</strong>
+          </a>
+          <a href="https://github.com/Hosico02/demo2project" target="_blank" rel="noreferrer">
+            <span>Verify-layer</span>
+            <strong>github.com/Hosico02/demo2project</strong>
           </a>
           <a href="https://github.com/Hosico02" target="_blank" rel="noreferrer">
             <span>Owner</span>

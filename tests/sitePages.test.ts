@@ -8,7 +8,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '..');
 
 describe('MatrixOmnix site', () => {
-  it('ships a Vite/Vue app with About, Service and Contact routes and verifier framing', async () => {
+  it('ships a Vite/Vue app with About, Service and Contact routes and MatrixOmnix umbrella framing', async () => {
     const result = await runCommand('node scripts/site-check.mjs', {
       cwd: root,
       timeoutMs: 20_000,
@@ -16,12 +16,17 @@ describe('MatrixOmnix site', () => {
     expect(result.passed).toBe(true);
 
     const app = await fs.readFile(path.join(root, 'site', 'src', 'App.vue'), 'utf8');
-    expect(app).toContain('verifier for demo-to-product');
+    // The site positions MatrixOmnix as a goal (demo → verified product) with
+    // two subsystems — d2p (do-layer) and the verify-layer in this repo —
+    // rather than describing this repo alone.
+    expect(app).toMatch(/demo into a verified product|two subsystems/i);
+    expect(app).toContain('d2p');
+    expect(app).toContain('verify-layer');
     expect(app).toContain('data-service-guide');
     expect(app).toMatch(/pnpm matrixomnix (analyze|gap|archetype) --project \.\/[\w-]+/);
     expect(app).toContain('v-if="page === \'home\'" class="cursor-capture"');
     expect(app).toContain('v-if="page === \'home\'" class="cursor-core"');
-    // Verifier never accepts uploads — these data attributes must not appear.
+    // Verify-layer never accepts uploads — these data attributes must not appear.
     expect(app).not.toContain('data-return-format="zip"');
     expect(app).not.toContain('data-demo-upload');
     expect(app).not.toContain('type="file"');
@@ -29,8 +34,8 @@ describe('MatrixOmnix site', () => {
     expect(app).toMatch(/framework-loop\.(svg|png|webp|jpg)/);
     expect(app).toMatch(/harness-map\.(svg|png|webp|jpg)/);
     expect(app).toMatch(/deployment-flow\.(svg|png|webp|jpg)/);
-    expect(app).toContain('Why it exists');
     expect(app).toContain('https://github.com/Hosico02/demo2project');
+    expect(app).toContain('https://github.com/Hosico02/d2p');
     expect(app).toContain('requestAnimationFrame');
     expect(app).toContain('onTouchstart');
   });

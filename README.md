@@ -1,27 +1,35 @@
-# MatrixOmnix
+# MatrixOmnix · verify-layer
 
-**MatrixOmnix is the verifier for demo-to-product pipelines.** A read-only
-MCP server (`d2p-verify`) plus a thin CLI that any agent-driven productization
-loop — [d2p](https://github.com/Hosico02/d2p), Claude Code, Cursor, custom —
-can call to get an honest archetype detection, gap report, evidence-weighted
-score and QA preflight on a project directory.
+**This repo is the verify-layer of MatrixOmnix.** MatrixOmnix is the
+umbrella product goal: turn a rough demo into a verified product. It is
+currently implemented as two open-source repos that work together:
 
-MatrixOmnix never writes to the project under verification. It only inspects,
-scores and reports.
+- **[`Hosico02/d2p`](https://github.com/Hosico02/d2p)** — the **do-layer**.
+  An LLM-driven Python orchestrator (Analyzer → Planner → parallel Executors
+  → QA) that produces the changes.
+- **`Hosico02/demo2project`** (this repo) — the **verify-layer**. A read-only
+  TypeScript MCP server (`d2p-verify`) plus thin CLI that returns an
+  independent verdict (archetype, evidence-weighted score, gap findings,
+  QA preflight) between iterations.
 
-`demo2project` remains as a backwards-compatible CLI alias.
+The two subsystems are deliberately split: the verify-layer must be able
+to call the do-layer a liar, so they cannot share code. They communicate
+over MCP stdio — no shared imports, no shared state.
 
-## Pair MatrixOmnix with a do-layer
+The **endgame** is a single MatrixOmnix tool. If the verify-layer keeps
+catching bugs that d2p's own QA misses, d2p will absorb the verifier
+and ship one combined tool. If d2p's growing regression corpus covers
+everything the verify-layer was catching, the verify-layer is retired
+and d2p stands alone as MatrixOmnix. The decision will be data-driven
+from real cross-project runs, not architectural taste.
 
-MatrixOmnix is read-only. Pair it with a do-layer that *can* mutate the project.
+`demo2project` remains as a backwards-compatible CLI alias for this repo.
 
-Recommended: [`Hosico02/d2p`](https://github.com/Hosico02/d2p) — an LLM-driven
-Python orchestrator (Analyzer → Planner → parallel Executors → QA) that
-produces changes, then hands off to MatrixOmnix for an independent verdict.
+## Calling the verify-layer
 
-Any MCP-aware client can call MatrixOmnix:
+Any MCP-aware client can call this repo:
 
-- d2p, via a post-iteration hook (not bundled — d2p's choice to integrate)
+- d2p, via a post-iteration hook in the do-layer (not bundled here)
 - Claude Code, Cursor or any MCP client (add to `.mcp.json`)
 - Manual via `npx @modelcontextprotocol/inspector node dist/mcp/server.js`
 
@@ -106,7 +114,7 @@ Detects the project archetype only (cheaper than `verify_project`). Returns:
 Real-project bench (sampled from public GitHub repos): 13/14 unfamiliar
 projects classified into the intended archetype.
 
-## What MatrixOmnix gates
+## What the verify-layer gates
 
 Every project surface is gated across three honest tiers:
 
@@ -211,11 +219,12 @@ Removed in the verifier pivot: `iterate`, `plan`, `long-run`, `autonomy:*`,
 `scenario:*`, `replay:*`, `regression:bisect`, `self-improve`, `governance:*`,
 advisory agents, providers (RuleBasedExecutor, MiniMax, ClaudeCode, …). Those
 were the do-layer. Use d2p or another do-layer to produce changes, then call
-MatrixOmnix.
+the verify-layer.
 
 ## Web
 
-[`site/`](site/) — Vite/Vue app describing MatrixOmnix. Live at
+[`site/`](site/) — Vite/Vue app describing the MatrixOmnix umbrella project
+(both subsystems, plus the merge endgame). Live at
 <https://matrixomnix.vercel.app>.
 
 ## Current limits
@@ -223,9 +232,9 @@ MatrixOmnix.
 - Reviewer is rule-based, not diff-based.
 - Score weights are heuristic; tune via `config/project-standard.json`.
 - QA regression runner asserts over recorded *events*, not live re-runs of commands.
-- The MatrixOmnix web Service page is a beta usage guide. Hosted file intake,
-  queued processing and artifact packaging are deferred — those would belong to
-  a do-layer service, not a verifier.
+- The MatrixOmnix web Service page is a usage guide for the open-source repos.
+  Hosted file intake, queued processing and artifact packaging are deferred —
+  those would belong to the do-layer, not the verify-layer.
 
 ## License
 

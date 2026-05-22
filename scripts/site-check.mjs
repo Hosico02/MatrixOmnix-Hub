@@ -54,8 +54,9 @@ record('home-hero-panel-separation', /<template v-if="page === 'home'">[\s\S]*<s
 record('home-only-cursor', /v-if="page === 'home'" class="cursor-capture"/.test(app) && /v-if="page === 'home'" class="cursor-core"/.test(app), 'Custom cursor renders only on Home');
 record('about-images', /framework-loop\.(svg|png|webp|jpg)/.test(app) && /harness-map\.(svg|png|webp|jpg)/.test(app) && /deployment-flow\.(svg|png|webp|jpg)/.test(app), 'About page uses framework images');
 record('github-url', /https:\/\/github\.com\/Hosico02\/demo2project/.test(app), 'open source URL is present');
-record('home-verifier-copy', /verifier for demo-to-product/.test(app), 'Home copy positions MatrixOmnix as the verifier');
-record('service-usage-guide', /data-service-guide/.test(app) && /pnpm matrixomnix (analyze|gap|archetype)/.test(app), 'Service page explains verifier CLI usage');
+record('home-umbrella-copy', /demo into a verified product|two subsystems|do-layer|verify-layer/i.test(app), 'Home copy positions MatrixOmnix as the umbrella project');
+record('service-usage-guide', /data-service-guide/.test(app) && /pnpm matrixomnix (analyze|gap|archetype)/.test(app), 'Service page explains verify-layer CLI usage');
+record('service-mentions-d2p', /python run\.py|github\.com\/Hosico02\/d2p/.test(app), 'Service page references the d2p do-layer');
 record('service-no-upload-form', !/data-upload-form|data-demo-upload|type="file"|data-return-format/.test(app), 'Service page does not present hosted upload or return service');
 record('service-no-upload-copy', !/Upload a demo|Receive a product zip|Output:\s*zip|uploaded demo archive|returned product|product zip artifacts/i.test(app + index), 'Service copy does not claim hosted upload/return is available');
 record('keyboard-flip', /onKeydown/.test(app) && /Enter/.test(app) && /Escape/.test(app), 'flip panels support keyboard interaction');
