@@ -1,8 +1,7 @@
 import { evaluateTrust, setTrust, quarantine as q, unquarantine as uq } from '../../security/untrusted/RepositoryTrustEvaluator.js';
 import { describeAllowedActions } from '../../security/untrusted/QuarantineMode.js';
 import type { TrustLevel } from '../../security/untrusted/TrustLevel.js';
-import { writeTrustReport, buildTrustReport } from '../../governance/TrustReport.js';
-import { defaultSystemRoot, requireProject, flagString } from './_shared.js';
+import { requireProject, flagString } from './_shared.js';
 
 export async function trustCheck(flags: Record<string, string | boolean>): Promise<number> {
   const projectPath = requireProject(flags);
@@ -42,16 +41,13 @@ export async function repoUnquarantine(flags: Record<string, string | boolean>):
 }
 
 export async function trustReport(flags: Record<string, string | boolean>): Promise<number> {
-  const projectPath = typeof flags.project === 'string' ? flags.project : undefined;
-  const root = defaultSystemRoot();
-  const r = await writeTrustReport(root, projectPath);
-  process.stdout.write(JSON.stringify({ trust_score: r.data.trust_score, report: { json: r.json, md: r.md } }, null, 2) + '\n');
-  return 0;
+  // Aggregated trust report removed with the governance/ subsystem in the
+  // verifier pivot. The per-project trust record is still available via
+  // `trust:check`.
+  return trustCheck(flags);
 }
 
 export async function trustExplain(flags: Record<string, string | boolean>): Promise<number> {
-  const projectPath = typeof flags.project === 'string' ? flags.project : undefined;
-  const data = await buildTrustReport(defaultSystemRoot(), projectPath);
-  process.stdout.write(JSON.stringify(data, null, 2) + '\n');
-  return 0;
+  // See note on trustReport.
+  return trustCheck(flags);
 }

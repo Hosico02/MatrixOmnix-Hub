@@ -6,7 +6,12 @@ import { evaluate, newRequest } from './PolicyEvaluator.js';
 import type { PolicyRequest, PolicyDecision } from './PolicyEvaluator.js';
 import { fromDecision, record as recordViolation } from './PolicyViolation.js';
 import type { PolicyViolation } from './PolicyViolation.js';
-import { append as auditAppend } from '../../governance/audit/AuditLog.js';
+// AuditLog removed in the verifier pivot (governance/ subsystem was do-layer
+// surface). Policy decisions are still computed and returned to the caller;
+// the audit-trail side effect is now the caller's responsibility.
+async function auditAppend(_systemRoot: string, _entry: unknown): Promise<void> {
+  /* no-op */
+}
 
 const POLICY_FILE = 'config/security-policy.json';
 

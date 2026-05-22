@@ -1,8 +1,0 @@
-{
-  "name": "stress-media-pipeline-demo",
-  "private": true,
-  "type": "module",
-  "dependencies": {
-    "sharp": "^0.34.0"
-  }
-}

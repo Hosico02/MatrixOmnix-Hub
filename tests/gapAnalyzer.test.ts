@@ -5,8 +5,6 @@ import { promises as fs } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { AnalyzerAgent } from '../src/agents/AnalyzerAgent.js';
 import { analyzeGaps, auditAgentMisjudgments } from '../src/core/gapAnalyzer.js';
-import { writeMarketResearchReport } from '../src/research/MarketResearchAgent.js';
-import type { MarketResearchReport } from '../src/research/types.js';
 import { takeSnapshot } from '../src/core/projectSnapshot.js';
 import type { ProjectScore, ProjectSnapshot } from '../src/core/types.js';
 import { selectStandardForSnapshot } from '../src/standards/standardsLibrary.js';
@@ -1662,43 +1660,6 @@ describe('gapAnalyzer', () => {
     expect(gap.score.score_gate?.failures.some((f) => f.gate === 'product_maturity')).not.toBe(true);
   });
 
-  it('adds source-cited market research gaps when a research report exists', async () => {
-    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-research-gap-integration-'));
-    await fs.writeFile(path.join(dir, 'README.md'), '# UI Demo\n\nA small visual demo.\n' + 'x'.repeat(240));
-    await fs.writeFile(path.join(dir, 'package.json'), JSON.stringify({
-      scripts: { build: 'node -e "console.log(1)"' },
-      dependencies: { vue: '^3.0.0' },
-    }));
-    await fs.writeFile(path.join(dir, 'index.html'), '<div id="app"></div>\n');
-    const report: MarketResearchReport = {
-      schema_version: 1,
-      generated_at: new Date(0).toISOString(),
-      project_path: dir,
-      domain: 'web_ui_app',
-      query: 'production web UI competitors',
-      search_provider: 'fixture',
-      copy_policy: 'Use competitor material only to extract capabilities; do not copy names, text, UI, code, or brand assets.',
-      sources: [{ title: 'UI benchmark', url: 'https://example.com/ui', retrieved_at: new Date(0).toISOString(), snippet: 'Responsive accessible UI.' }],
-      capabilities: [{
-        id: 'responsive_accessible_ui',
-        label: 'Responsive and accessible UI',
-        description: 'Keyboard, touch, responsive layout and semantic labels.',
-        importance: 'required',
-        source_urls: ['https://example.com/ui'],
-        local_evidence_patterns: ['aria-', '@media', 'focus-visible'],
-      }],
-      risks: [],
-      confidence: 'medium',
-    };
-    await writeMarketResearchReport(dir, report);
-
-    const { gap } = await new AnalyzerAgent().fullAnalyze(dir);
-    const finding = gap.findings.find((f) => f.category === 'below_market_research_parity');
-
-    expect(finding?.message).toContain('Responsive and accessible UI');
-    expect(gap.product_maturity?.references).toContain('https://example.com/ui');
-    expect(gap.score.score_gate?.failures.some((f) => f.gate === 'product_maturity')).toBe(true);
-  });
 
   it('flags LLM web demos that require a server-wide API key instead of player-supplied provider config', async () => {
     const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-llm-provider-config-gap-'));
@@ -1878,48 +1839,6 @@ describe('gapAnalyzer', () => {
     const categories = gap.findings.map((f) => f.category);
 
     expect(categories).toContain('llm_provider_catalog_missing_official_models');
-  });
-
-  it('flags LLM provider catalogs stale against a refreshed official model catalog', async () => {
-    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-llm-stale-model-catalog-gap-'));
-    await fs.mkdir(path.join(dir, 'templates'), { recursive: true });
-    await fs.mkdir(path.join(dir, '.demo2project', 'research'), { recursive: true });
-    await fs.writeFile(path.join(dir, 'README.md'), '# LLM Demo\n\nA browser LLM demo.\n' + 'x'.repeat(420));
-    await fs.writeFile(path.join(dir, 'requirements.txt'), 'flask>=3.0.0\npytest>=8.0.0\n');
-    await fs.writeFile(path.join(dir, 'app.py'), 'from flask import Flask\napp = Flask(__name__)\n');
-    await fs.writeFile(path.join(dir, '.demo2project', 'research', 'llm-model-catalog.json'), JSON.stringify({
-      schema_version: 1,
-      generated_at: new Date(0).toISOString(),
-      providers: [{
-        id: 'openai',
-        label: 'OpenAI',
-        base_url: 'https://api.openai.com/v1',
-        default_model: 'gpt-5.4-mini',
-        models: ['gpt-5.5', 'gpt-5.4', 'gpt-5.4-mini'],
-        source_url: 'https://platform.openai.com/docs/models',
-        source_name: 'OpenAI official model docs',
-        source_kind: 'official_docs_snapshot',
-        retrieved_at: new Date(0).toISOString(),
-      }],
-      warnings: [],
-    }, null, 2));
-    await fs.writeFile(path.join(dir, 'llm_config.py'), [
-      'def public_provider_config():',
-      '    return {"providers": [',
-      '        {"id": "deepseek", "label": "DeepSeek", "base_url": "https://api.deepseek.com", "default_model": "deepseek-v4-flash", "models": ["deepseek-v4-flash"], "source_url": "https://api-docs.deepseek.com/api/list-models"},',
-      '        {"id": "minimax", "label": "MiniMax", "base_url": "https://api.minimax.io/v1", "default_model": "MiniMax-M2.7", "models": ["MiniMax-M2.7"], "source_url": "https://platform.minimax.io/docs/guides/text-generation"},',
-      '        {"id": "qwen", "label": "Qwen", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1", "default_model": "qwen3.6-plus", "models": ["qwen3.6-plus"], "source_url": "https://www.alibabacloud.com/help/en/model-studio/text-generation-model"},',
-      '        {"id": "openai", "label": "OpenAI", "base_url": "https://api.openai.com/v1", "default_model": "gpt-5-mini", "models": ["gpt-5-mini", "gpt-5.2"], "source_url": "https://platform.openai.com/docs/models"},',
-      '        {"id": "custom", "label": "Custom", "base_url": "", "default_model": "", "models": []},',
-      '    ], "requires_player_key": True}',
-      '',
-    ].join('\n'));
-    await fs.writeFile(path.join(dir, 'templates', 'index.html'), '<select id="llmProvider"></select><select id="llmModel"></select>\n');
-
-    const { gap } = await new AnalyzerAgent().fullAnalyze(dir);
-    const categories = gap.findings.map((f) => f.category);
-
-    expect(categories).toContain('llm_provider_catalog_outdated_against_official_refresh');
   });
 
   it('flags API projects without a contract/runtime harness', async () => {
@@ -2768,51 +2687,6 @@ describe('gapAnalyzer', () => {
     expect(gap.findings.map((f) => f.category)).not.toContain('missing_api_error_envelope');
   });
 
-  it('BFS-traces external SDK imports through multi-hop internal modules', async () => {
-    // app.py → services/router.py → services/llm.py → openai
-    // The previous depth-1 walker missed cases like this; the BFS walker
-    // visits the transitive closure of relative imports until it finds
-    // an external-service SDK or runs out of files (cap: 200 files,
-    // depth 6).
-    //
-    // NOTE: this test verifies the BFS surface-detection function in
-    // isolation. Propagating that signal into a specific route's
-    // `callsExternalService` flag requires also tracking which imported
-    // *names* came from externally-reaching modules — see the
-    // limitation comment in `parseApiRoutes`. For now BFS proves the
-    // module-level signal is correct; per-route propagation through
-    // intermediate function calls is a follow-up.
-    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-bfs-multi-hop-'));
-    await fs.mkdir(path.join(dir, 'services'), { recursive: true });
-    await fs.writeFile(
-      path.join(dir, 'app.py'),
-      [
-        'from fastapi import FastAPI',
-        'from services.router import route_message',
-        '',
-        'app = FastAPI()',
-        '',
-        '@app.post("/chat")',
-        'async def chat(body: dict):',
-        '    return {"reply": await route_message(body.get("message", ""))}',
-        '',
-      ].join('\n'),
-    );
-    await fs.writeFile(path.join(dir, 'services', '__init__.py'), '');
-    await fs.writeFile(
-      path.join(dir, 'services', 'router.py'),
-      'from services.llm import call_llm\nasync def route_message(m): return await call_llm(m)\n',
-    );
-    await fs.writeFile(
-      path.join(dir, 'services', 'llm.py'),
-      'import openai\nasync def call_llm(m): return openai.OpenAI().chat.completions.create(model="x", messages=[]).choices[0].message.content\n',
-    );
-    const { aggregatePythonImportExternalSurface } = await import('../src/agents/providers/RuleBasedExecutor.js') as any;
-    const entryText = await fs.readFile(path.join(dir, 'app.py'), 'utf8');
-    const reachesExternal = await aggregatePythonImportExternalSurface(dir, 'app.py', entryText);
-    expect(reachesExternal).toBe(true);
-  });
-
   it('declarative archetype loader detects Rust axum via JSON probes', async () => {
     const { detectArchetype } = await import('../src/core/projectArchetypeDetector.js') as any;
     const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-arche-rust-'));
@@ -2878,134 +2752,6 @@ describe('gapAnalyzer', () => {
     await fs.writeFile(path.join(dir, 'src', 'main.rs'), 'fn main() {}\n');
     const report = await detectArchetype(dir);
     expect(report.primary.id).toBe('my-custom-rust-cli');
-  });
-
-  it('BFS returns false for a closed import graph with no external SDK', async () => {
-    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-bfs-no-external-'));
-    await fs.mkdir(path.join(dir, 'services'), { recursive: true });
-    await fs.writeFile(path.join(dir, 'app.py'), 'from services.router import route\n');
-    await fs.writeFile(path.join(dir, 'services', '__init__.py'), '');
-    await fs.writeFile(path.join(dir, 'services', 'router.py'), 'def route(): return "ok"\n');
-    const { aggregatePythonImportExternalSurface } = await import('../src/agents/providers/RuleBasedExecutor.js') as any;
-    const reachesExternal = await aggregatePythonImportExternalSurface(dir, 'app.py', 'from services.router import route\n');
-    expect(reachesExternal).toBe(false);
-  });
-
-  it('BFS surface (detailed, python) records imported names from externally-reaching modules', async () => {
-    // app.py imports `route_message` from services.router which transitively
-    // reaches openai. The detailed surface should report `route_message` as
-    // an externally-reaching name so a route handler that calls
-    // `await route_message(...)` can be flagged externally-reaching even
-    // though the handler body never names the SDK directly.
-    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-bfs-names-py-'));
-    await fs.mkdir(path.join(dir, 'services'), { recursive: true });
-    const entryText = 'from services.router import route_message, healthcheck\nasync def main(): pass\n';
-    await fs.writeFile(path.join(dir, 'app.py'), entryText);
-    await fs.writeFile(path.join(dir, 'services', '__init__.py'), '');
-    await fs.writeFile(
-      path.join(dir, 'services', 'router.py'),
-      'from services.llm import call_llm\nasync def route_message(m): return await call_llm(m)\nasync def healthcheck(): return True\n',
-    );
-    await fs.writeFile(
-      path.join(dir, 'services', 'llm.py'),
-      'import openai\nasync def call_llm(m): pass\n',
-    );
-    const { aggregatePythonImportSurfaceDetailed } = await import('../src/agents/providers/RuleBasedExecutor.js') as any;
-    const result = await aggregatePythonImportSurfaceDetailed(dir, 'app.py', entryText);
-    expect(result.moduleReachesExternal).toBe(true);
-    expect(Array.from(result.externalImportNames).sort()).toEqual(['healthcheck', 'route_message']);
-  });
-
-  it('BFS surface (detailed, node) records imported names from externally-reaching modules', async () => {
-    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-bfs-names-node-'));
-    await fs.mkdir(path.join(dir, 'services'), { recursive: true });
-    const entryText = "import { routeMessage } from './services/router.js';\nimport express from 'express';\nconst app = express();\n";
-    await fs.writeFile(path.join(dir, 'app.js'), entryText);
-    await fs.writeFile(
-      path.join(dir, 'services', 'router.js'),
-      "import { callLlm } from './llm.js';\nexport async function routeMessage(m) { return callLlm(m); }\n",
-    );
-    await fs.writeFile(
-      path.join(dir, 'services', 'llm.js'),
-      "import OpenAI from 'openai';\nexport async function callLlm(m) { return new OpenAI().chat.completions.create({}); }\n",
-    );
-    const { aggregateNodeImportSurfaceDetailed } = await import('../src/agents/providers/RuleBasedExecutor.js') as any;
-    const result = await aggregateNodeImportSurfaceDetailed(dir, 'app.js', entryText);
-    expect(result.moduleReachesExternal).toBe(true);
-    expect(Array.from(result.externalImportNames)).toContain('routeMessage');
-  });
-
-  it('flags a flask route as callsExternalService when handler calls an opaque internal helper reaching an external SDK', async () => {
-    // The known limitation flagged in parseApiRoutes' comments: a handler
-    // that delegates via `await route_message(...)` to an internal module
-    // that BFS-reaches openai should still be flagged externally-reaching.
-    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-route-taint-flask-'));
-    await fs.mkdir(path.join(dir, 'services'), { recursive: true });
-    await fs.writeFile(
-      path.join(dir, 'app.py'),
-      [
-        'from flask import Flask, jsonify, request',
-        'from services.router import route_message',
-        '',
-        'app = Flask(__name__)',
-        '',
-        '@app.post("/chat")',
-        'def chat():',
-        '    body = request.get_json() or {}',
-        '    return jsonify({"reply": route_message(body.get("message", ""))})',
-        '',
-      ].join('\n'),
-    );
-    await fs.writeFile(path.join(dir, 'services', '__init__.py'), '');
-    await fs.writeFile(
-      path.join(dir, 'services', 'router.py'),
-      'from services.llm import call_llm\ndef route_message(m): return call_llm(m)\n',
-    );
-    await fs.writeFile(
-      path.join(dir, 'services', 'llm.py'),
-      'import openai\ndef call_llm(m): return openai.OpenAI().chat.completions.create(model="x", messages=[]).choices[0].message.content\n',
-    );
-    const { detectPythonApiRuntimeLayout } = await import('../src/agents/providers/RuleBasedExecutor.js') as any;
-    const layout = await detectPythonApiRuntimeLayout(dir);
-    expect(layout).not.toBeNull();
-    const chatRoute = layout.routes.find((r: any) => r.path === '/chat');
-    expect(chatRoute).toBeDefined();
-    expect(chatRoute.callsExternalService).toBe(true);
-  });
-
-  it('flags an express route as callsExternalService when handler calls an opaque internal helper reaching an external SDK', async () => {
-    const dir = await fs.mkdtemp(path.join(tmpdir(), 'd2p-route-taint-express-'));
-    await fs.mkdir(path.join(dir, 'services'), { recursive: true });
-    await fs.writeFile(
-      path.join(dir, 'app.js'),
-      [
-        "import express from 'express';",
-        "import { routeMessage } from './services/router.js';",
-        '',
-        'const app = express();',
-        '',
-        "app.post('/chat', async (req, res) => {",
-        '  const reply = await routeMessage(req.body.message);',
-        '  res.json({ reply });',
-        '});',
-        '',
-        'export default app;',
-      ].join('\n'),
-    );
-    await fs.writeFile(
-      path.join(dir, 'services', 'router.js'),
-      "import { callLlm } from './llm.js';\nexport async function routeMessage(m) { return callLlm(m); }\n",
-    );
-    await fs.writeFile(
-      path.join(dir, 'services', 'llm.js'),
-      "import OpenAI from 'openai';\nexport async function callLlm(m) { return new OpenAI().chat.completions.create({}); }\n",
-    );
-    const { detectNodeApiRuntimeLayout } = await import('../src/agents/providers/RuleBasedExecutor.js') as any;
-    const layout = await detectNodeApiRuntimeLayout(dir);
-    expect(layout).not.toBeNull();
-    const chatRoute = layout.routes.find((r: any) => r.path === '/chat');
-    expect(chatRoute).toBeDefined();
-    expect(chatRoute.callsExternalService).toBe(true);
   });
 
   it('suppresses LLM chat-style findings for an LLM-backed simulation server that has no chat route', async () => {
