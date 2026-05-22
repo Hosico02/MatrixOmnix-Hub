@@ -31,7 +31,7 @@
             </div>
 
             <p class="subcopy">
-              MatrixOmnix is currently in beta: a multi-agent harness for turning rough demos into verified product baselines. 15 out of 15 stress fixtures reach product-ready, 752 vitest tests pass, and every product surface is gated across three honest tiers — structural contract, behavioural runtime, and productization surface.
+              MatrixOmnix is the verifier for demo-to-product pipelines: a read-only MCP server (<code>d2p-verify</code>) plus CLI that gives any agent-driven productization loop an honest archetype detection, gap report, evidence-weighted score and QA preflight on a project directory. Every product surface is gated across three honest tiers — structural contract, behavioural runtime, and productization surface. Pair it with d2p or any MCP-aware do-layer.
             </p>
           </div>
         </section>
@@ -48,25 +48,25 @@
           </FlipPanel>
         </section>
 
-        <section class="sibling-card" aria-label="Sibling project d2p">
+        <section class="sibling-card" aria-label="Recommended do-layer d2p">
           <div class="sibling-card__body">
-            <div class="sibling-card__kicker">Sibling project</div>
+            <div class="sibling-card__kicker">Recommended do-layer</div>
             <h2 class="sibling-card__title">
               <a href="https://github.com/Hosico02/d2p" target="_blank" rel="noopener">d2p</a>
-              — the minimal agent-driven demo-to-product loop
+              — produces changes; MatrixOmnix verifies them
             </h2>
             <p class="sibling-card__copy">
-              The same demo-to-product idea expressed in roughly 4,000 lines of Python with <strong>no hardcoded demo-type detectors</strong>. An Analyzer agent searches the web for mature competitor products, a Planner diffs them against your demo, and parallel Executors fill the gaps. A QA agent emits failing tests as bug reports that become a permanent regression corpus. Adding a new domain — audio, blockchain, robotics, anything — needs zero code changes.
+              MatrixOmnix is read-only. Pair it with a do-layer that <em>can</em> mutate the project. d2p is an LLM-driven Python orchestrator (Analyzer → Planner → parallel Executors → QA) with <strong>no hardcoded demo-type detectors</strong>: its Analyzer searches the web for mature competitor products, a Planner diffs them against your demo, and parallel Executors fill the gaps. After each iteration, hand the project to MatrixOmnix for an independent archetype + gap + score verdict.
             </p>
             <ul class="sibling-card__bullets">
-              <li><strong>~4k LOC Python</strong> total core vs MatrixOmnix's ~41k TypeScript</li>
-              <li>Pure LLM analysis, no hardcoded gap detectors or fixture catalogue</li>
+              <li><strong>~8k LOC Python</strong> with no hardcoded gap detectors or fixture catalogue</li>
               <li>MiniMax, Claude, Codex or Claude CLI via a per-role model router</li>
               <li>Health snapshot + baseline-test rollback prevents silent regressions</li>
               <li>Failing tests stay in <code>tests/d2p_qa/</code> as a permanent regression corpus</li>
+              <li>Any MCP client can call MatrixOmnix — d2p, Claude Code, Cursor, custom</li>
             </ul>
             <p class="sibling-card__pair">
-              MatrixOmnix and d2p are complementary: MatrixOmnix's hardened pipeline gives strong inflation resistance on known archetypes; d2p's minimal loop generalises to new ones at zero marginal cost.
+              d2p and MatrixOmnix are complementary by design: d2p is the do-layer (changes the project), MatrixOmnix is the verify-layer (returns yes/no with evidence). Neither competes with the other.
             </p>
             <a class="sibling-card__cta" href="https://github.com/Hosico02/d2p" target="_blank" rel="noopener">
               View Hosico02/d2p on GitHub →
@@ -105,7 +105,7 @@
           <article>
             <h2>What it is today</h2>
             <p>
-              The beta runs locally against a repository you control. It analyzes project structure, detects delivery surfaces, researches market expectations when explicitly allowed, plans verified task batches, runs provider-backed executors, repairs failed verification first and stores evidence under <code>.demo2project</code>. It now distinguishes agent-facing simulation products from human multiplayer products, so a multi-agent werewolf theater is evaluated against model configuration, rules, replay, evaluation and observability rather than being forced into an account-and-matchmaking roadmap.
+              MatrixOmnix is a read-only verifier exposed as an MCP stdio server (<code>d2p-verify</code>) plus a back-compat CLI. It analyzes project structure, detects delivery surfaces, computes an evidence-weighted score, emits a gap report with severity-tagged findings and surfaces QA preflight warnings — without ever modifying the project under verification. Project archetype detection is driven by hybrid declarative JSON probes plus built-in TypeScript probes covering python-library, node-library, rust-library, mdbook, vscode-extension, go-web, rails-app and more; the real-project bench classifies 13 of 14 unfamiliar GitHub repos into the intended archetype. Any MCP client (d2p, Claude Code, Cursor, custom) can call <code>verify_project</code> for the full envelope or <code>detect_archetype</code> for the cheaper archetype-only path.
             </p>
           </article>
           <article>
@@ -126,7 +126,7 @@
           <article>
             <h2>Current state</h2>
             <p>
-              MatrixOmnix can already lift rough repositories into stronger engineering baselines by adding tests, runtime contracts, configuration checks, documentation, deployment hooks, UI harnesses and QA regression memory. The latest live MiniMax-M2.7-highspeed run on a restored agent-facing werewolf demo reached a 97/100 production-ready baseline with zero open findings and 33 passing pytest cases in three iterations, with no repair task. The built-in stress suite reaches product-ready on 15/15 demo fixtures, the vitest suite reports 752/752 passing, and every product surface is gated across three honest tiers — tier-1 structural contract (always-on), tier-2 behavioural runtime (skips with a diagnostic when the surface's runtime lib is absent), and tier-3 productization surface (operational gates above runtime). Each surface emits a blocker- or high-severity finding when its runtime code path is unverified: API surfaces must answer a test-client HTTP round trip and ship a structured <code>{error, message, status}</code> JSON envelope for 404 and uncaught exceptions; config surfaces must load under synthetic env values (Python and Node); workers must enqueue and drain a job end-to-end (Python and Node); notebooks must execute every cell through nbclient; CLI binaries must exit cleanly on both <code>--help</code> and a real positional argument; DB CRUD surfaces must prove insert → select → delete round-trips; multi-service repos must drive cross-service state propagation; media pipelines must actually pipe a synthetic input through sharp / ffmpeg / canvas; and the specialized Node surfaces (ML inference, game loop, 3D scene render, browser extension manifest, mobile bundle, desktop boot) each carry a dynamic-import runtime test that exercises the real library when available and records an explicit diagnostic when not. For LLM chat demos with a real <code>/chat</code>-style HTTP surface, MatrixOmnix gates the full productization suite: prompt-eval harness with golden cases, mocked provider failure fallback returning structured 5xx, <code>MAX_MESSAGE_LENGTH</code> guard rejecting oversized input, <code>prompts/</code> template registry, and a generated <code>streaming.py</code> SSE endpoint — all driven by chat-route detection rather than just an LLM dependency, so LLM-backed simulation servers stay correctly classified. Project archetype is decided by hybrid declarative + built-in probes covering python-library, node-library, rust-library, mdbook, vscode-extension, go-web, rails-app and more, with a real-project bench classifying 13 of 14 unfamiliar GitHub repos into the intended archetype; <code>callsExternalService</code> walks the full BFS import graph and propagates the externally-reaching taint through opaque internal helpers so a handler that delegates via <code>await route_message(body)</code> is classified correctly even when the SDK lives several modules deep.
+              MatrixOmnix gates every product surface across three honest tiers — tier-1 structural contract (always-on), tier-2 behavioural runtime (skips with a diagnostic when the surface's runtime lib is absent), and tier-3 productization surface (operational gates above runtime). Each surface emits a blocker- or high-severity finding when its runtime code path is unverified: API surfaces must answer a test-client HTTP round trip and ship a structured <code>{error, message, status}</code> JSON envelope for 404 and uncaught exceptions; config surfaces must load under synthetic env values (Python and Node); workers must enqueue and drain a job end-to-end (Python and Node); notebooks must execute every cell through nbclient; CLI binaries must exit cleanly on both <code>--help</code> and a real positional argument; DB CRUD surfaces must prove insert → select → delete round-trips; multi-service repos must drive cross-service state propagation; media pipelines must actually pipe a synthetic input through sharp / ffmpeg / canvas; and the specialized Node surfaces (ML inference, game loop, 3D scene render, browser extension manifest, mobile bundle, desktop boot) each carry a dynamic-import runtime test that exercises the real library when available and records an explicit diagnostic when not. For LLM chat demos with a real <code>/chat</code>-style HTTP surface, MatrixOmnix gates the full productization suite: prompt-eval harness with golden cases, mocked provider failure fallback returning structured 5xx, <code>MAX_MESSAGE_LENGTH</code> guard rejecting oversized input, <code>prompts/</code> template registry, and SSE streaming endpoint — all driven by chat-route detection rather than just an LLM dependency. The vitest suite reports 219/219 passing on the verifier-only build.
             </p>
           </article>
           <article>
