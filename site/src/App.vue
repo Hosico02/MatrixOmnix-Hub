@@ -31,20 +31,20 @@
             </div>
 
             <p class="subcopy">
-              MatrixOmnix is the verifier for demo-to-product pipelines: a read-only MCP server (<code>d2p-verify</code>) plus CLI that gives any agent-driven productization loop an honest archetype detection, gap report, evidence-weighted score and QA preflight on a project directory. Every product surface is gated across three honest tiers — structural contract, behavioural runtime, and productization surface. Pair it with d2p or any MCP-aware do-layer.
+              The verifier for demo-to-product pipelines. A read-only MCP server (<code>d2p-verify</code>) any agent — d2p, Claude Code, Cursor, custom — can call to get an honest archetype detection, gap report, evidence-weighted score and QA preflight on a project directory. MatrixOmnix never writes; it only inspects, scores and reports.
             </p>
           </div>
         </section>
 
         <section class="panel-grid" aria-label="MatrixOmnix capability panels">
-          <FlipPanel id="intake" title="Intake" :active="flippedPanels.has('intake')" @open="flipOn" @close="flipOff">
-            Point MatrixOmnix at a local demo repository to detect runtime, entrypoints, project surfaces and immediate product gaps.
+          <FlipPanel id="detect" title="Detect" :active="flippedPanels.has('detect')" @open="flipOn" @close="flipOff">
+            <code>detect_archetype(path)</code> returns the primary archetype with confidence, detected signals and top-3 alternatives. Hybrid declarative JSON + built-in probes; 13/14 hit rate on unfamiliar GitHub repos.
           </FlipPanel>
           <FlipPanel id="verify" title="Verify" :active="flippedPanels.has('verify')" @open="flipOn" @close="flipOff">
-            Analyzer, Planner, Executor, Verifier, Reviewer and QA Memory require evidence before claiming progress.
+            <code>verify_project(path)</code> returns archetype, evidence-weighted score, verdict (pass / needs_repair / fail), severity-tagged findings, evidence summary and QA preflight in one envelope. Read-only.
           </FlipPanel>
-          <FlipPanel id="operate" title="Operate" :active="flippedPanels.has('operate')" @open="flipOn" @close="flipOff">
-            Use the CLI to run controlled iterations, inspect evidence, replay QA regressions and decide when a demo is product-ready.
+          <FlipPanel id="integrate" title="Integrate" :active="flippedPanels.has('integrate')" @open="flipOn" @close="flipOff">
+            Stdio MCP transport. Add to <code>.mcp.json</code> for Claude Code / Cursor, or shell out from any orchestrator. Pair with d2p (recommended do-layer) for a full demo → verified product loop.
           </FlipPanel>
         </section>
 
@@ -76,22 +76,22 @@
       </template>
 
       <section v-else-if="page === 'about'" class="content-page about-page" id="about">
-        <PageHeading kicker="About" title="MatrixOmnix is a demo-to-product operating system.">
-          MatrixOmnix exists because a demo can look impressive while still missing the systems that make it usable, testable, deployable and maintainable. The project is currently a beta local-first multi-agent harness. Its long-term direction is a managed productization platform with auditable workspaces, market-aware gates, premise-preserving domain models and repeatable long-horizon runs.
+        <PageHeading kicker="About" title="The verifier for demo-to-product pipelines.">
+          MatrixOmnix is the read-only verify-layer of a two-part architecture. A separate do-layer (d2p, Claude Code, Cursor, custom) produces changes; MatrixOmnix gives an independent verdict — archetype, evidence-weighted score, gap findings, QA preflight — via an MCP stdio server any agent can call.
         </PageHeading>
 
-        <div class="image-grid" aria-label="MatrixOmnix framework diagrams">
+        <div class="image-grid" aria-label="MatrixOmnix verifier diagrams">
           <figure>
-            <img src="./assets/framework-loop.png" alt="MatrixOmnix multi-agent loop diagram: Analyzer, Planner, Executor, Verifier, Reviewer, QA Memory, with opt-in web research and advisory critics." />
-            <figcaption>Multi-agent loop · with opt-in web research</figcaption>
+            <img src="./assets/framework-loop.png" alt="MatrixOmnix verifier flow: any MCP client calls d2p-verify; the server runs AnalyzerAgent which produces a project snapshot, then ProjectScorer and gapAnalyzer, then a QA preflight." />
+            <figcaption>Verifier flow · MCP client → d2p-verify → archetype + gap + score + QA</figcaption>
           </figure>
           <figure>
-            <img src="./assets/harness-map.png" alt="MatrixOmnix harness coverage map: 15 product surfaces across three honest tiers — structural contract (always-on), behavioural runtime (skips when the surface's runtime lib is absent), and productization surface (operational maturity gates above runtime)." />
+            <img src="./assets/harness-map.png" alt="MatrixOmnix harness coverage map: every product surface gated across three honest tiers — structural contract (always-on), behavioural runtime (skips when the surface's runtime lib is absent), and productization surface (operational maturity gates above runtime)." />
             <figcaption>3 tiers · structural · behavioural · productization</figcaption>
           </figure>
           <figure>
-            <img src="./assets/deployment-flow.png" alt="MatrixOmnix roadmap: shipped today, planned next, and explicitly not in scope yet." />
-            <figcaption>Roadmap · shipped, planned, not yet in scope</figcaption>
+            <img src="./assets/deployment-flow.png" alt="MatrixOmnix shipping plan: Phase A ships the two MCP tools and the back-compat CLI today; Phase B candidates (trust_check, qa_regression_replay, report_project, compare_runs) wait on real consumer demand." />
+            <figcaption>Phase A shipped · Phase B candidates parked</figcaption>
           </figure>
         </div>
 
@@ -99,40 +99,40 @@
           <article>
             <h2>Why it exists</h2>
             <p>
-              Coding agents are already strong at producing code, but demo-to-product work fails when there is no independent system asking whether the result has tests, contracts, configuration, runtime controls, documentation, UX checks, release evidence and regression memory. MatrixOmnix sits above coding agents and turns those expectations into a supervised loop.
+              Coding agents are good at producing code; they are systematically bad at independently verifying that the code actually became a maintainable project. AI agents skip verification, claim completion without evidence, reintroduce yesterday's bug, and ship READMEs that lie about what runs. MatrixOmnix is the part of the loop that refuses to take the agent's word for it — a separate process, with no write access, that says yes or no with evidence.
             </p>
           </article>
           <article>
-            <h2>What it is today</h2>
+            <h2>How it works</h2>
             <p>
-              MatrixOmnix is a read-only verifier exposed as an MCP stdio server (<code>d2p-verify</code>) plus a back-compat CLI. It analyzes project structure, detects delivery surfaces, computes an evidence-weighted score, emits a gap report with severity-tagged findings and surfaces QA preflight warnings — without ever modifying the project under verification. Project archetype detection is driven by hybrid declarative JSON probes plus built-in TypeScript probes covering python-library, node-library, rust-library, mdbook, vscode-extension, go-web, rails-app and more; the real-project bench classifies 13 of 14 unfamiliar GitHub repos into the intended archetype. Any MCP client (d2p, Claude Code, Cursor, custom) can call <code>verify_project</code> for the full envelope or <code>detect_archetype</code> for the cheaper archetype-only path.
+              MatrixOmnix exposes two MCP tools over stdio. <code>verify_project(path)</code> returns a single envelope: <code>archetype</code>, <code>score</code> (0..100, evidence-weighted), <code>verdict</code> (pass / needs_repair / fail), <code>findings</code> (severity-sorted), <code>evidence</code> summary, and <code>qa_preflight</code> (known-recurring fingerprints). <code>detect_archetype(path)</code> is a cheaper archetype-only path. The do-layer (d2p, Claude Code, …) calls these between iterations and decides whether to keep going.
             </p>
           </article>
           <article>
-            <h2>What we do not claim yet</h2>
+            <h2>What it gates</h2>
             <p>
-              MatrixOmnix is not yet a hosted upload-and-return service, and a high internal score must not replace human review. The current priority is making the scoring stricter and faster: source-cited market research must produce real capabilities, provider output must be parseable, every product-ready claim must survive tests, builds and gap gates, and mechanical closeout work should not burn model time.
+              Every product surface is gated across three honest tiers: tier-1 structural contract (always-on source-shape checks), tier-2 behavioural runtime (exercises the surface end-to-end; honestly skip-with-diagnostic when the runtime lib is absent), tier-3 productization surface (operational gates above runtime — error envelope, prompt-eval harness, provider failure fallback, token budget, prompt template registry, streaming response). Project archetype is decided by a hybrid of declarative JSON probes and built-in TypeScript probes; the real-project bench classifies 13 of 14 unfamiliar GitHub repos correctly.
             </p>
           </article>
           <article>
-            <h2>Where it is going</h2>
+            <h2>What it explicitly does not do</h2>
             <p>
-              The roadmap moves toward managed workspaces, queued long-running sessions, safer provider sandboxes, richer UI/browser verification, domain-specific product gates, team dashboards and report artifacts that explain exactly what changed, what passed, what failed and what still blocks a mature product release.
+              No writes to the project under verification. No HTTP transport — stdio only. No multi-tenancy, auth or billing. No hosted upload-and-return service. No claim that a high internal score replaces human review. Those boundaries are the design's point: a verifier that mutates state or speaks a richer protocol is not independent.
             </p>
           </article>
         </section>
 
-        <section class="text-grid" aria-label="Current and future state">
+        <section class="text-grid" aria-label="Phase A and Phase B">
           <article>
-            <h2>Current state</h2>
+            <h2>Phase A · shipped</h2>
             <p>
-              MatrixOmnix gates every product surface across three honest tiers — tier-1 structural contract (always-on), tier-2 behavioural runtime (skips with a diagnostic when the surface's runtime lib is absent), and tier-3 productization surface (operational gates above runtime). Each surface emits a blocker- or high-severity finding when its runtime code path is unverified: API surfaces must answer a test-client HTTP round trip and ship a structured <code>{error, message, status}</code> JSON envelope for 404 and uncaught exceptions; config surfaces must load under synthetic env values (Python and Node); workers must enqueue and drain a job end-to-end (Python and Node); notebooks must execute every cell through nbclient; CLI binaries must exit cleanly on both <code>--help</code> and a real positional argument; DB CRUD surfaces must prove insert → select → delete round-trips; multi-service repos must drive cross-service state propagation; media pipelines must actually pipe a synthetic input through sharp / ffmpeg / canvas; and the specialized Node surfaces (ML inference, game loop, 3D scene render, browser extension manifest, mobile bundle, desktop boot) each carry a dynamic-import runtime test that exercises the real library when available and records an explicit diagnostic when not. For LLM chat demos with a real <code>/chat</code>-style HTTP surface, MatrixOmnix gates the full productization suite: prompt-eval harness with golden cases, mocked provider failure fallback returning structured 5xx, <code>MAX_MESSAGE_LENGTH</code> guard rejecting oversized input, <code>prompts/</code> template registry, and SSE streaming endpoint — all driven by chat-route detection rather than just an LLM dependency. The vitest suite reports 219/219 passing on the verifier-only build.
+              Two MCP tools (<code>verify_project</code>, <code>detect_archetype</code>) plus a thin back-compat CLI. Built on the existing archetype detector, gap analyzer (80+ finding categories), evidence-weighted scorer, and QA case store. The do-layer (RuleBasedExecutor, iterate command, long-horizon autonomy, advisory agents, ~60 do-layer CLI commands) was surgically removed in the pivot: ~41k LOC → ~12k LOC, 752 vitest tests → 219, all passing. Pre-pivot state preserved at git tag <code>v0.0.6-final</code>.
             </p>
           </article>
           <article>
-            <h2>Future state</h2>
+            <h2>Phase B · parking lot</h2>
             <p>
-              The mature product should compare a demo against real market expectations, run for hours without losing discipline, explain every gate in plain language and let teams decide whether to continue iterating, ship an internal baseline or block release until remaining product gaps are closed. Hosted upload, workspace isolation, queues and product ZIP return remain future service work, not current beta claims.
+              Not pre-built. Each candidate has a graduation criterion driven by real consumer signal: <code>trust_check</code> (when verify passes but README lies, observed ≥ 2×), <code>qa_regression_replay</code> (when cross-project fingerprint reuse occurs), <code>report_project</code> (when JSON isn't enough for a consumer), <code>compare_runs</code> (when a downstream orchestrator wants the verifier to drive termination). HTTP transport, multi-tenancy, hosted upload — explicitly never.
             </p>
           </article>
         </section>
@@ -143,47 +143,50 @@
       </section>
 
       <section v-else-if="page === 'service'" class="content-page service-page" id="service">
-        <PageHeading kicker="Service" title="How to use MatrixOmnix beta.">
-          MatrixOmnix is not a hosted file-processing service yet. Use the beta locally from the CLI, review every verification report, and keep productization changes under source control. The default zero-cost path uses the deterministic <code>rule-based</code> executor and never calls a paid model; LLM providers are opt-in via <code>--provider</code> and <code>--web</code>.
+        <PageHeading kicker="Service" title="How to integrate MatrixOmnix.">
+          MatrixOmnix is a read-only verifier that runs as a local MCP stdio server (<code>d2p-verify</code>) plus a back-compat CLI. There is no hosted service. Pick the path that matches your client.
         </PageHeading>
 
         <section class="service-layout" data-service-guide>
           <article class="usage-card">
-            <h2>Beta workflow</h2>
+            <h2>Install</h2>
             <p>
-              Install once, run the onboarding wizard, then drive read-only <code>analyze</code> and <code>gap</code> against your demo before you let <code>iterate</code> write anything. The default <code>--provider rule-based</code> path is fully deterministic, requires no API key, and is the one validated by the 15/15 stress suite. Add <code>--provider minimax</code> (requires <code>MINIMAX_API_KEY</code>) plus <code>--web --advisory-agents</code> only when you want model-backed critics and source-cited market research layered on top.
+              MatrixOmnix is a single Node package. Clone, install, build — that's it. The server is invoked over stdio so there's no port to configure and no daemon to keep alive.
             </p>
-            <code>pnpm install && pnpm build</code>
-            <code>pnpm matrixomnix doctor</code>
-            <code>pnpm matrixomnix init --interactive</code>
-            <code>pnpm matrixomnix quickstart --use-example</code>
+            <code>git clone https://github.com/Hosico02/demo2project</code>
+            <code>cd demo2project && pnpm install</code>
+            <code>pnpm build</code>
+            <code>pnpm matrixomnix archetype --project ./your-repo</code>
           </article>
 
           <ol class="usage-steps">
-            <li><strong>Doctor + Init</strong><span>Run <code>pnpm matrixomnix doctor</code> to confirm Node, pnpm and (optional) Claude/MiniMax detection; then <code>pnpm matrixomnix init --interactive</code> picks a profile (conservative / balanced / autonomous) and writes <code>config/demo2project.json</code>.</span></li>
-            <li><strong>Analyze</strong><span>Run <code>pnpm matrixomnix analyze --project ./your-demo</code> (read-only). Detects runtime, dependencies, entrypoints, UI/API/CLI/data/worker surfaces, secrets risk and missing project contracts.</span></li>
-            <li><strong>Gap</strong><span>Run <code>pnpm matrixomnix gap --project ./your-demo</code>. Evidence-weighted by default — actually executes detected tests and builds, then caps the score when evidence is red. Add <code>--fast</code> for a static-only scan when you only want the finding list.</span></li>
-            <li><strong>Iterate</strong><span>Run <code>pnpm matrixomnix iterate --project ./your-demo --provider rule-based --max-iterations 1</code> for a deterministic round. Each productized surface ships gates in three tiers — structural, behavioural and productization — so passing tests at one tier does not let the project skip the next.</span></li>
-            <li><strong>Verify + report</strong><span>Re-run <code>pnpm matrixomnix gap --project ./your-demo</code> and then <code>pnpm matrixomnix report:project --project ./your-demo</code> for a Markdown+JSON summary. Generated harnesses include API runtime + error envelope, config + worker runtime (Python and Node), and the full LLM chat productization suite when a real <code>/chat</code>-style route is detected.</span></li>
+            <li><strong>Path A · MCP client</strong><span>Add to your MCP client config (Claude Code's <code>.mcp.json</code>, Cursor's settings, etc.):<br /><code>{"mcpServers":{"d2p-verify":{"command":"node","args":["/abs/path/dist/mcp/server.js"]}}}</code><br />The client discovers <code>verify_project</code> and <code>detect_archetype</code> automatically.</span></li>
+            <li><strong>Path B · subprocess</strong><span>Any orchestrator (d2p, custom Python/Go/Rust) can spawn <code>node dist/mcp/server.js</code> and talk JSON-RPC over its stdio. The MCP protocol is documented at <code>spec.modelcontextprotocol.io</code>. d2p's optional post-iteration hook is downstream — not bundled here.</span></li>
+            <li><strong>Path C · CLI</strong><span>For one-off checks or CI: <code>pnpm matrixomnix archetype --project ./your-repo</code> for the cheap path, <code>pnpm matrixomnix gap --project ./your-repo</code> for the full gap report (evidence-weighted by default; add <code>--fast</code> for static-only).</span></li>
+            <li><strong>verify_project envelope</strong><span>Returns <code>{archetype, score, verdict, findings, evidence, qa_preflight}</code>. Verdict is <code>fail</code> if any finding is <code>blocker</code> severity, <code>needs_repair</code> if any <code>high</code>, else <code>pass</code>. Drive your do-layer's next iteration from this single value.</span></li>
+            <li><strong>Inspect interactively</strong><span>The MCP Inspector lets you call tools by hand to confirm the server is wired up correctly: <code>npx @modelcontextprotocol/inspector node dist/mcp/server.js</code>.</span></li>
           </ol>
         </section>
 
-        <code class="command-strip">pnpm matrixomnix iterate --project ./your-demo --provider rule-based --max-iterations 1</code>
+        <code class="command-strip">node dist/mcp/server.js  # d2p-verify stdio server</code>
         <p class="service-footnote">
-          Opt-in model-backed path (requires <code>MINIMAX_API_KEY</code> and network):
-          <code>pnpm matrixomnix iterate --project ./your-demo --provider minimax --web --advisory-agents --max-iterations 4</code>
+          Verifier never writes to the project under verification. Pair with a do-layer (<a href="https://github.com/Hosico02/d2p" target="_blank" rel="noopener">d2p</a> recommended) to produce changes, then call <code>verify_project</code> again.
         </p>
       </section>
 
       <section v-else class="content-page contact-page" id="contact">
-        <PageHeading kicker="Contact" title="Bring a rough demo. Leave with a product baseline.">
-          Use GitHub for issues, roadmap discussion and deployment feedback while the hosted MatrixOmnix service is being prepared.
+        <PageHeading kicker="Contact" title="Pair MatrixOmnix with your do-layer.">
+          MatrixOmnix is open source. File issues, propose Phase B graduations, or share verify_project envelopes that surfaced real bugs in your pipeline. The recommended do-layer is d2p — link your demo there, verify here.
         </PageHeading>
 
         <div class="contact-grid">
           <a href="https://github.com/Hosico02/demo2project" target="_blank" rel="noreferrer">
-            <span>Repository</span>
+            <span>Verifier · this repo</span>
             <strong>github.com/Hosico02/demo2project</strong>
+          </a>
+          <a href="https://github.com/Hosico02/d2p" target="_blank" rel="noreferrer">
+            <span>Recommended do-layer</span>
+            <strong>github.com/Hosico02/d2p</strong>
           </a>
           <a href="https://github.com/Hosico02" target="_blank" rel="noreferrer">
             <span>Owner</span>
