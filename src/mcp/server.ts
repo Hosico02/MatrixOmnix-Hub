@@ -2,7 +2,8 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import type { DetectArchetypeArgs, VerifyProjectArgs } from './tools.js';
+import type { DetectArchetypeArgs, DetectArchetypeOutput, VerifyProjectArgs } from './tools.js';
+import { detectArchetype } from '../core/projectArchetypeDetector.js';
 
 const server = new Server(
   { name: 'd2p-verify', version: '0.1.0' },
@@ -61,8 +62,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
 // Implementation stubs — wired in Tasks 4 and 5.
 
-export async function runDetectArchetypeImpl(_projectPath: string): Promise<unknown> {
-  throw new Error('detect_archetype not yet wired');
+export async function runDetectArchetypeImpl(projectPath: string): Promise<DetectArchetypeOutput> {
+  const report = await detectArchetype(projectPath);
+  return {
+    primary: {
+      id: String(report.primary.id),
+      confidence: report.primary.confidence,
+      detected_signals: report.primary.detected_signals,
+      missing_signals: report.primary.missing_signals,
+      recommended_standard: report.primary.recommended_standard,
+      risk_profile: report.primary.risk_profile,
+    },
+    alternatives: report.alternatives.map((a) => ({ id: String(a.id), confidence: a.confidence })),
+  };
 }
 
 export async function runVerifyImpl(_projectPath: string, _hint?: string): Promise<unknown> {
