@@ -1,6 +1,0 @@
-{
-  "name": "bad-node-cli",
-  "version": "0.0.1",
-  "private": true,
-  "bin": { "bad": "./bin/bad.js" }
-}

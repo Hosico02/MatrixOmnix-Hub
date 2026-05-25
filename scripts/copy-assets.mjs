@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /**
  * Postbuild: copy non-TS assets that tsc ignores into dist/.
- *  - src/standards/library/*.standard.json -> dist/standards/library/
- *  - templates/claude/** -> dist/templates/claude/ (so claude:install-hooks works)
+ *  - src/standards/{base,archetypes,learned}/*.json -> dist/standards/...
+ *  - src/security/policy/*.json -> dist/security/policy/
+ *  - src/hub/db/migrations/*.sql -> dist/hub/db/migrations/ (Hub runtime needs them)
  */
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
@@ -32,7 +33,6 @@ const pairs = [
   ['src/standards/base', 'dist/standards/base'],
   ['src/standards/archetypes', 'dist/standards/archetypes'],
   ['src/standards/learned', 'dist/standards/learned'],
-  ['templates', 'dist/templates'],
   ['src/security/policy', 'dist/security/policy'],
   ['src/hub/db/migrations', 'dist/hub/db/migrations'],
 ];

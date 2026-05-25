@@ -1,6 +1,0 @@
-{
-  "name": "bad-monorepo",
-  "version": "0.0.1",
-  "private": true,
-  "workspaces": ["packages/*"]
-}

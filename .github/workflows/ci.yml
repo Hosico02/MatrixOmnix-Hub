@@ -1,4 +1,4 @@
-name: Demo2Project CI
+name: MatrixOmnix Hub CI
 
 on:
   push:

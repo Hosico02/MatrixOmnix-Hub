@@ -1,6 +1,0 @@
-{
-  "name": "bad-next-app",
-  "version": "0.0.1",
-  "private": true,
-  "dependencies": { "next": "^14.0.0", "react": "^18.0.0", "react-dom": "^18.0.0" }
-}
