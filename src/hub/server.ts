@@ -49,10 +49,10 @@ export function buildApp(handle: DbHandle, opts: AppOpts) {
   app.route('/api', runsRoute(handle));
   app.route('/api', proposalsRoute(handle));
 
-  if (opts.runner && opts.runnerCfg?.enabled) {
+  if (opts.runner) {
     app.route('/', runsRunnerRoute(handle, opts.runner, {
       adminToken: opts.adminToken,
-      cfg: opts.runnerCfg,
+      cfg: opts.runnerCfg ?? null,
     }));
   }
 

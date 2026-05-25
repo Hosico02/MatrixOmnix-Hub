@@ -7,5 +7,6 @@ export default defineConfig({
     testTimeout: 120_000,
     hookTimeout: 60_000,
     pool: 'forks',
+    setupFiles: ['tests/setup/mock-child-process.ts'],
   },
 });
