@@ -3,6 +3,7 @@ import type { DbHandle } from './db/client.js';
 import { adminAuth } from './auth.js';
 import { eventsRoute } from './routes/events.js';
 import { standardsRoute } from './routes/standards.js';
+import { runsRoute } from './routes/runs.js';
 import { makeInstanceLookup } from './instanceLookup.js';
 
 export interface AppOpts {
@@ -29,6 +30,7 @@ export function buildApp(handle: DbHandle, opts: AppOpts) {
   const lookup = makeInstanceLookup(handle);
   app.route('/', eventsRoute(handle, lookup));
   app.route('/', standardsRoute(handle));
+  app.route('/', runsRoute(handle));
 
   return app;
 }
