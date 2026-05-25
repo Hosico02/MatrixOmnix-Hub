@@ -1,21 +1,43 @@
+# Dependencies
 node_modules/
 .pnpm-store/
+
+# Build outputs
 dist/
-.demo2project/
-*.log
-.DS_Store
+.vite/
+
+# Test / coverage / cache
 coverage/
 .tmp/
-reports/autonomy/
-reports/project-report/
-reports/security/
-reports/trust/
-reports/evaluation/evaluation-report-*.json
-reports/evaluation/evaluation-report-*.md
+.pytest_cache/
+*.bak
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor / IDE
+.idea/
+.vscode/
+
+# Local Claude Code state (per-machine)
+.claude/
+
+# Deploy provider state
 .vercel
+
+# Project-local d2p run artifacts
+.demo2project/
 demo/manual-runs/
 demo/productized/
 demo/reports/
+
+# Auto-generated reports (bench / eval / long-run / workspace snapshots)
+# Source materials live in qa/specs/, benchmarks/, examples/ — not here.
+reports/
 
 # Local-only conversation context archives (not for upstream)
 doc/
