@@ -1,6 +1,8 @@
 import { Hono } from 'hono';
 import type { DbHandle } from './db/client.js';
 import { adminAuth } from './auth.js';
+import { eventsRoute } from './routes/events.js';
+import { makeInstanceLookup } from './instanceLookup.js';
 
 export interface AppOpts {
   adminToken: string | null;
@@ -22,6 +24,9 @@ export function buildApp(handle: DbHandle, opts: AppOpts) {
       });
     },
   );
+
+  const lookup = makeInstanceLookup(handle);
+  app.route('/', eventsRoute(handle, lookup));
 
   return app;
 }
