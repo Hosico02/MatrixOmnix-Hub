@@ -111,7 +111,8 @@ describe('POST /admin/runs/start', () => {
     expect(j.pid).toBe(99999);
     expect(spawnSpy).toHaveBeenCalledTimes(1);
     const [cmd, args, opts] = spawnSpy.mock.calls[0] as any;
-    expect(cmd).toBe('python');
+    // python3 — /fake/d2p has no .venv in test setup, so falls back to system
+    expect(cmd).toBe('python3');
     expect(args).toContain(join('/fake/d2p', 'run.py'));
     expect(args).toContain('--iter');
     expect(args).toContain('2');

@@ -78,7 +78,12 @@ export function runsRunnerRoute(
       // through so the spawn (or its stub) surfaces.
     }
     const runId = randomUUID();
-    const command = 'python';
+    // Prefer the d2p venv's python3 (has the d2p deps installed). Falls
+    // back to system python3 — macOS doesn't ship a `python` symlink, so
+    // hardcoding `python` breaks the spawn with ENOENT.
+    const { existsSync: _exists } = await import('node:fs');
+    const venvPython = `${deps.cfg.d2pPath}/.venv/bin/python3`;
+    const command = _exists(venvPython) ? venvPython : 'python3';
     // argv form — no shell parsing. project_path is the only user-supplied
     // string and it's already prefix-whitelisted above.
     const args = [
