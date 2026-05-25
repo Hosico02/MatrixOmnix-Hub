@@ -25,6 +25,11 @@ export function migrate(sqlite: Database.Database) {
   const files = readdirSync(dir).filter((f) => f.endsWith('.sql')).sort();
   for (const f of files) {
     const sqlText = readFileSync(join(dir, f), 'utf-8');
-    sqlite.exec(sqlText);
+    // Make statements idempotent by converting CREATE TABLE to CREATE TABLE IF NOT EXISTS
+    const idempotentSql = sqlText
+      .replace(/CREATE TABLE `/g, 'CREATE TABLE IF NOT EXISTS `')
+      .replace(/CREATE UNIQUE INDEX `/g, 'CREATE UNIQUE INDEX IF NOT EXISTS `')
+      .replace(/CREATE INDEX `/g, 'CREATE INDEX IF NOT EXISTS `');
+    sqlite.exec(idempotentSql);
   }
 }

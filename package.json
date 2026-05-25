@@ -24,6 +24,7 @@
     "qa:regression": "node dist/cli/index.js qa:regression",
     "self-check": "node dist/cli/index.js self-check",
     "init": "node dist/cli/index.js init",
+    "hub:seed": "tsx src/hub/cli/seed.ts",
     "site:dev": "pnpm --dir site dev",
     "site:build": "pnpm --dir site build",
     "site:preview": "pnpm --dir site preview",
