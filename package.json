@@ -8,7 +8,7 @@
   "bin": {
     "matrixomnix": "./dist/cli/index.js",
     "demo2project": "./dist/cli/index.js",
-    "d2p-verify": "./dist/mcp/server.js"
+    "matrixomnix-hub": "./dist/hub/index.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/copy-assets.mjs",
@@ -16,7 +16,9 @@
     "test:watch": "vitest",
     "demo2project": "node dist/cli/index.js",
     "matrixomnix": "node dist/cli/index.js",
-    "d2p-verify": "node dist/mcp/server.js",
+    "hub:dev": "tsx watch src/hub/index.ts",
+    "hub:start": "node dist/hub/index.js",
+    "hub:build": "tsc -p tsconfig.json && node scripts/copy-assets.mjs && pnpm site:build",
     "analyze": "node dist/cli/index.js analyze",
     "gap": "node dist/cli/index.js gap",
     "archetype": "node dist/cli/index.js archetype",

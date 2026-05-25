@@ -14,7 +14,7 @@ const EventBody = z.object({
     'finding_recorded', 'run_terminated',
   ]),
   run_id: z.string(),
-  payload: z.record(z.any()),
+  payload: z.record(z.string(), z.any()),
 });
 
 export function eventsRoute(handle: DbHandle, lookup: InstanceLookup) {
