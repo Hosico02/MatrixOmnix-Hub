@@ -14,18 +14,6 @@ export function iterationsDir(projectPath: string): string {
   return path.join(stateDir(projectPath), 'iterations');
 }
 
-export function qaCasesPath(projectPath: string): string {
-  return path.join(stateDir(projectPath), 'qa-cases.json');
-}
-
-/**
- * Path to the system-level regression spec (lives in the demo2project repo,
- * not the target). It is the assertion library + accumulated case index.
- */
-export function regressionSpecPath(systemRoot: string): string {
-  return path.join(systemRoot, 'qa', 'specs', 'qa-regression.spec.json');
-}
-
 export function isInsideDir(child: string, parent: string): boolean {
   const rel = path.relative(parent, child);
   return !!rel && !rel.startsWith('..') && !path.isAbsolute(rel);

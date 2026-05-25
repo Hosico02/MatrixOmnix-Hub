@@ -3,8 +3,6 @@ import { init } from './commands/init.js';
 import { analyze } from './commands/analyze.js';
 import { gap } from './commands/gap.js';
 import { archetype } from './commands/archetype.js';
-import { qaPreflight } from './commands/qaPreflight.js';
-import { qaRegression } from './commands/qaRegression.js';
 import { selfCheck } from './commands/selfCheck.js';
 import { doctor } from './commands/doctor.js';
 import { quickstart } from './commands/quickstart.js';
@@ -70,9 +68,7 @@ Core commands:
   trust:report                                    Aggregated trust posture
   trust:explain                                   Explain a trust finding
   docs:truth  --project <path>                    README/docs vs reality
-  qa:preflight --project <path>                   Load active QA cases
-  qa:regression --project <path>                  Replay QA regression spec
-  self-check                                      Run analyze/gap/regression on this repo
+  self-check                                      Run analyze/gap on this repo
   evidence:show --project <path>                  Inspect evidence graph
   evidence:explain --node <id>                    Explain an evidence node
   standards:list / explain / validate
@@ -111,10 +107,6 @@ async function main(): Promise<number> {
       return trustExplain(args.flags);
     case 'docs:truth':
       return docsTruth(args.flags);
-    case 'qa:preflight':
-      return qaPreflight(args.flags);
-    case 'qa:regression':
-      return qaRegression(args.flags);
     case 'self-check':
       return selfCheck(args.flags);
     case 'evidence:show':

@@ -22,8 +22,6 @@
     "analyze": "node dist/cli/index.js analyze",
     "gap": "node dist/cli/index.js gap",
     "archetype": "node dist/cli/index.js archetype",
-    "qa:preflight": "node dist/cli/index.js qa:preflight",
-    "qa:regression": "node dist/cli/index.js qa:regression",
     "self-check": "node dist/cli/index.js self-check",
     "init": "node dist/cli/index.js init",
     "hub:seed": "tsx src/hub/cli/seed.ts",
