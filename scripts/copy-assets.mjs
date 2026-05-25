@@ -34,6 +34,7 @@ const pairs = [
   ['src/standards/learned', 'dist/standards/learned'],
   ['templates', 'dist/templates'],
   ['src/security/policy', 'dist/security/policy'],
+  ['src/hub/db/migrations', 'dist/hub/db/migrations'],
 ];
 let copied = 0;
 for (const [s, d] of pairs) {

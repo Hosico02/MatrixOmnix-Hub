@@ -8,7 +8,7 @@
   "bin": {
     "matrixomnix": "./dist/cli/index.js",
     "demo2project": "./dist/cli/index.js",
-    "d2p-verify": "./dist/mcp/server.js"
+    "matrixomnix-hub": "./dist/hub/index.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/copy-assets.mjs",
@@ -16,7 +16,9 @@
     "test:watch": "vitest",
     "demo2project": "node dist/cli/index.js",
     "matrixomnix": "node dist/cli/index.js",
-    "d2p-verify": "node dist/mcp/server.js",
+    "hub:dev": "tsx watch src/hub/index.ts",
+    "hub:start": "node dist/hub/index.js",
+    "hub:build": "tsc -p tsconfig.json && node scripts/copy-assets.mjs && pnpm site:build",
     "analyze": "node dist/cli/index.js analyze",
     "gap": "node dist/cli/index.js gap",
     "archetype": "node dist/cli/index.js archetype",
@@ -24,6 +26,7 @@
     "qa:regression": "node dist/cli/index.js qa:regression",
     "self-check": "node dist/cli/index.js self-check",
     "init": "node dist/cli/index.js init",
+    "hub:seed": "tsx src/hub/cli/seed.ts",
     "site:dev": "pnpm --dir site dev",
     "site:build": "pnpm --dir site build",
     "site:preview": "pnpm --dir site preview",
@@ -31,7 +34,12 @@
     "site:deploy": "node scripts/site-check.mjs && npx --yes vercel deploy --prod --yes"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^3.0.0",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.0.0",
+    "drizzle-kit": "^0.31.10",
+    "tsup": "^8.5.1",
+    "tsx": "^4.22.3",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"
   },
@@ -40,10 +48,18 @@
   },
   "pnpm": {
     "onlyBuiltDependencies": [
-      "esbuild"
+      "esbuild",
+      "better-sqlite3"
     ]
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0"
+    "@anthropic-ai/sdk": "^0.98.0",
+    "@hono/node-server": "^2.0.3",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "bcryptjs": "^3.0.3",
+    "better-sqlite3": "^12.10.0",
+    "drizzle-orm": "^0.45.2",
+    "hono": "^4.12.22",
+    "zod": "^4.4.3"
   }
 }
