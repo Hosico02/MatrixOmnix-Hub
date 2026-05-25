@@ -6,6 +6,7 @@ import { events } from '../db/schema.js';
 import { bearerAuth, type InstanceLookup, type InstanceInfo } from '../auth.js';
 import { payloadHash } from '../ingest/payloadHash.js';
 import { dispatchIngest } from '../ingest/eventHandlers.js';
+import { debouncedRulePass } from '../learner/runner.js';
 
 const EventBody = z.object({
   type: z.enum([
@@ -42,6 +43,7 @@ export function eventsRoute(handle: DbHandle, lookup: InstanceLookup) {
     }
 
     dispatchIngest(handle, inst, type, run_id, payload);
+    debouncedRulePass(handle, { disabledRules: new Set() });
     return c.json({ event_id: id });
   });
   return r;

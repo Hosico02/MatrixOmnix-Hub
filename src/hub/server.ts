@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { DbHandle } from './db/client.js';
 import { adminAuth } from './auth.js';
+import { adminRoute } from './routes/admin.js';
 import { eventsRoute } from './routes/events.js';
 import { standardsRoute } from './routes/standards.js';
 import { runsRoute } from './routes/runs.js';
@@ -29,6 +30,7 @@ export function buildApp(handle: DbHandle, opts: AppOpts) {
   );
 
   const lookup = makeInstanceLookup(handle);
+  app.route('/', adminRoute(handle, opts.adminToken));
   app.route('/', eventsRoute(handle, lookup));
   app.route('/', standardsRoute(handle));
   app.route('/', runsRoute(handle));
