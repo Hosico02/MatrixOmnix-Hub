@@ -4,6 +4,7 @@ import { adminAuth } from './auth.js';
 import { eventsRoute } from './routes/events.js';
 import { standardsRoute } from './routes/standards.js';
 import { runsRoute } from './routes/runs.js';
+import { proposalsRoute } from './routes/proposals.js';
 import { makeInstanceLookup } from './instanceLookup.js';
 
 export interface AppOpts {
@@ -31,6 +32,7 @@ export function buildApp(handle: DbHandle, opts: AppOpts) {
   app.route('/', eventsRoute(handle, lookup));
   app.route('/', standardsRoute(handle));
   app.route('/', runsRoute(handle));
+  app.route('/', proposalsRoute(handle));
 
   return app;
 }
