@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 540" role="img" aria-labelledby="deployment-title">
+  <title id="deployment-title">MatrixOmnix deployment topology: one Hub, many d2p instances</title>
+  <style>
+    .bg { fill: transparent; }
+    .machine { stroke-width: 1.5; rx: 12; }
+    .machine-d2p { fill: #0c4a6e; stroke: #38bdf8; }
+    .machine-hub { fill: #78350f; stroke: #f59e0b; }
+    .kicker { fill: #94a3b8; font: 10px ui-sans-serif, sans-serif; letter-spacing: 0.08em; text-transform: uppercase; }
+    .label { fill: #e2e8f0; font: bold 14px ui-sans-serif, sans-serif; }
+    .label-do { fill: #7dd3fc; }
+    .label-hub { fill: #fbbf24; font: bold 18px ui-sans-serif, sans-serif; }
+    .meta { fill: #cbd5e1; font: 11px ui-monospace, Menlo, monospace; }
+    .meta-strong { fill: #fbbf24; font: 12px ui-monospace, Menlo, monospace; }
+    .arrow { stroke: #f59e0b; stroke-width: 2; fill: none; marker-end: url(#ah-y); }
+    .note { fill: #94a3b8; font: italic 12px ui-sans-serif, "PingFang SC", sans-serif; }
+    .note-strong { fill: #e2e8f0; font: 13px ui-sans-serif, "PingFang SC", sans-serif; }
+    .divider { stroke: #475569; stroke-width: 1; stroke-dasharray: 4 4; }
+    @media (prefers-color-scheme: light) {
+      .machine-d2p { fill: #e0f2fe; stroke: #0ea5e9; }
+      .machine-hub { fill: #fef3c7; stroke: #d97706; }
+      .kicker { fill: #64748b; }
+      .label { fill: #1f2937; }
+      .label-do { fill: #0369a1; }
+      .label-hub { fill: #b45309; }
+      .meta { fill: #475569; }
+      .meta-strong { fill: #b45309; }
+      .arrow { stroke: #d97706; }
+      .note { fill: #64748b; }
+      .note-strong { fill: #1f2937; }
+      .divider { stroke: #cbd5e1; }
+    }
+  </style>
+  <defs>
+    <marker id="ah-y" markerWidth="10" markerHeight="10" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#f59e0b"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" width="900" height="540"/>
+
+  <!-- d2p instances on the left -->
+  <text class="kicker" x="40" y="50">d2p runs anywhere</text>
+
+  <rect class="machine machine-d2p" x="40" y="70" width="220" height="80"/>
+  <text class="label label-do" x="60" y="100">d2p · dev-laptop</text>
+  <text class="meta" x="60" y="125">HUB_URL=http://hub:3030</text>
+  <text class="meta" x="60" y="142">python run.py demo/</text>
+
+  <rect class="machine machine-d2p" x="40" y="170" width="220" height="80"/>
+  <text class="label label-do" x="60" y="200">d2p · ci-runner</text>
+  <text class="meta" x="60" y="225">HUB_URL=http://hub:3030</text>
+  <text class="meta" x="60" y="242">automated nightly</text>
+
+  <rect class="machine machine-d2p" x="40" y="270" width="220" height="80"/>
+  <text class="label label-do" x="60" y="300">d2p · teammate</text>
+  <text class="meta" x="60" y="325">HUB_URL=http://hub:3030</text>
+  <text class="meta" x="60" y="342">python run.py other-demo/</text>
+
+  <!-- Hub on the right -->
+  <text class="kicker" x="500" y="50">Hub · one self-hosted process</text>
+
+  <rect class="machine machine-hub" x="500" y="70" width="360" height="280"/>
+  <text class="label-hub" x="525" y="105">MatrixOmnix Hub</text>
+  <text class="kicker" x="525" y="130">one node process · one sqlite file</text>
+
+  <text class="meta-strong" x="525" y="165">/api/events  /api/standards</text>
+  <text class="meta-strong" x="525" y="185">/api/runs  /api/proposals</text>
+  <text class="meta-strong" x="525" y="205">/admin/health  /admin/...</text>
+
+  <text class="meta" x="525" y="240">~/.matrixomnix/hub.db</text>
+  <text class="meta" x="525" y="260">127.0.0.1:3030 (default)</text>
+  <text class="meta" x="525" y="280">or 0.0.0.0 for LAN/VPS</text>
+
+  <text class="meta" x="525" y="312">→ Vue dashboard at /</text>
+  <text class="meta" x="525" y="332">→ d2p clients hit /api/*</text>
+
+  <!-- arrows from each d2p to Hub -->
+  <path class="arrow" d="M 270 110 Q 380 90, 490 110"/>
+  <path class="arrow" d="M 270 210 L 490 210"/>
+  <path class="arrow" d="M 270 310 Q 380 330, 490 310"/>
+
+  <!-- fail-safe notes at bottom -->
+  <line class="divider" x1="40" y1="390" x2="860" y2="390"/>
+  <text class="note-strong" x="40" y="425">fail-safe by design</text>
+  <text class="note" x="40" y="450">Hub down  →  d2p falls back to cached standards (then baked-in), keeps running, queues events locally</text>
+  <text class="note" x="40" y="472">d2p down  →  Hub is just an idle dashboard, no error state</text>
+  <text class="note" x="40" y="494">no shared imports, no shared state — only HTTP + bearer token</text>
+</svg>

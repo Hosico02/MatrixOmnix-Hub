@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 540" role="img" aria-labelledby="hub-layers-title">
+  <title id="hub-layers-title">MatrixOmnix Hub internal stack: data, learn, decide</title>
+  <style>
+    .layer { stroke-width: 1.5; rx: 14; }
+    .layer-data { fill: #1e293b; stroke: #475569; }
+    .layer-learn { fill: #422006; stroke: #f59e0b; }
+    .layer-decide { fill: #14532d; stroke: #22c55e; }
+    .kicker { fill: #94a3b8; font: 11px ui-sans-serif, sans-serif; letter-spacing: 0.1em; text-transform: uppercase; }
+    .kicker-cn { fill: #fbbf24; font: bold 16px ui-sans-serif, "PingFang SC", sans-serif; }
+    .item { fill: #e2e8f0; font: 13px ui-monospace, Menlo, monospace; }
+    .item-strong { fill: #fbbf24; font: bold 14px ui-sans-serif, sans-serif; }
+    .arrow { stroke: #f59e0b; stroke-width: 2.5; fill: none; marker-end: url(#arrowhead-y); }
+    .badge { fill: #0f172a; stroke: #475569; stroke-width: 1; rx: 12; }
+    .badge-text { fill: #cbd5e1; font: 11px ui-monospace, Menlo, monospace; }
+    @media (prefers-color-scheme: light) {
+      .layer-data { fill: #f1f5f9; stroke: #94a3b8; }
+      .layer-learn { fill: #fef3c7; stroke: #d97706; }
+      .layer-decide { fill: #d1fae5; stroke: #16a34a; }
+      .kicker { fill: #64748b; }
+      .kicker-cn { fill: #b45309; }
+      .item { fill: #1f2937; }
+      .item-strong { fill: #b45309; }
+      .arrow { stroke: #d97706; }
+      .badge { fill: #ffffff; stroke: #cbd5e1; }
+      .badge-text { fill: #475569; }
+    }
+  </style>
+  <defs>
+    <marker id="arrowhead-y" markerWidth="10" markerHeight="10" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#f59e0b"/>
+    </marker>
+  </defs>
+
+  <rect class="layer layer-data" x="80" y="30" width="740" height="130"/>
+  <text class="kicker" x="105" y="60">Layer 1</text>
+  <text class="kicker-cn" x="105" y="85">数据 · Data</text>
+  <text class="item" x="105" y="115">d2p_instances · runs · iterations · verdicts · findings · events</text>
+  <text class="item" x="105" y="140">standards · standard_versions · proposals · proposal_evidence · mentor_notes</text>
+  <rect class="badge" x="660" y="68" width="140" height="26"/>
+  <text class="badge-text" x="675" y="85">SQLite + Drizzle</text>
+
+  <line class="arrow" x1="450" y1="170" x2="450" y2="195"/>
+
+  <rect class="layer layer-learn" x="80" y="205" width="740" height="130"/>
+  <text class="kicker" x="105" y="235">Layer 2</text>
+  <text class="kicker-cn" x="105" y="260">学习 · Learn</text>
+  <text class="item-strong" x="105" y="288">5 SQL rules:</text>
+  <text class="item" x="220" y="288">R1 persistent · R2 dead-check · R3 severity-drift · R4 archetype-drift · R5 repeated</text>
+  <text class="item-strong" x="105" y="312">Weekly Opus pass:</text>
+  <text class="item" x="245" y="312">synthesises patterns the rules cannot catch and emits ProposalCandidates</text>
+  <rect class="badge" x="660" y="243" width="140" height="26"/>
+  <text class="badge-text" x="675" y="260">debounced 60s</text>
+
+  <line class="arrow" x1="450" y1="345" x2="450" y2="370"/>
+
+  <rect class="layer layer-decide" x="80" y="380" width="740" height="130"/>
+  <text class="kicker" x="105" y="410">Layer 3</text>
+  <text class="kicker-cn" x="105" y="435">决定 · Decide</text>
+  <text class="item-strong" x="105" y="463">待办 inbox:</text>
+  <text class="item" x="200" y="463">human reviews each proposal, hits approve / reject / edit</text>
+  <text class="item-strong" x="105" y="487">on approve:</text>
+  <text class="item" x="205" y="487">new row in standard_versions, standards.is_current flips, next d2p run uses it</text>
+  <rect class="badge" x="660" y="418" width="140" height="26"/>
+  <text class="badge-text" x="675" y="435">human gate</text>
+</svg>

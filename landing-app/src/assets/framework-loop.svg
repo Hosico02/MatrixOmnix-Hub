@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 540" role="img" aria-labelledby="title">
+  <title id="title">d2p and MatrixOmnix Hub loop</title>
+  <style>
+    .bg { fill: transparent; }
+    .box { fill: #1e293b; stroke: #475569; stroke-width: 1.5; rx: 12; }
+    .box-d2p { fill: #0c4a6e; stroke: #38bdf8; }
+    .box-hub { fill: #78350f; stroke: #f59e0b; }
+    .title { fill: #fbbf24; font: bold 22px ui-sans-serif, -apple-system, "PingFang SC", sans-serif; }
+    .title-do { fill: #38bdf8; }
+    .title-observe { fill: #fbbf24; }
+    .kicker { fill: #94a3b8; font: 11px ui-sans-serif, sans-serif; letter-spacing: 0.08em; text-transform: uppercase; }
+    .item { fill: #e2e8f0; font: 14px ui-sans-serif, sans-serif; }
+    .item-mono { fill: #cbd5e1; font: 12px ui-monospace, Menlo, monospace; }
+    .arrow { stroke: #f59e0b; stroke-width: 2.5; fill: none; marker-end: url(#arrowhead); }
+    .arrow-back { stroke: #38bdf8; stroke-width: 2.5; fill: none; marker-end: url(#arrowhead-blue); stroke-dasharray: 6 4; }
+    .arrow-label { fill: #e2e8f0; font: 13px ui-monospace, Menlo, monospace; }
+    .arrow-label-bg { fill: #0f172a; }
+    @media (prefers-color-scheme: light) {
+      .box { fill: #f8fafc; stroke: #cbd5e1; }
+      .box-d2p { fill: #e0f2fe; stroke: #0ea5e9; }
+      .box-hub { fill: #fef3c7; stroke: #d97706; }
+      .title { fill: #b45309; }
+      .title-do { fill: #0369a1; }
+      .title-observe { fill: #b45309; }
+      .kicker { fill: #64748b; }
+      .item { fill: #1f2937; }
+      .item-mono { fill: #475569; }
+      .arrow { stroke: #d97706; }
+      .arrow-back { stroke: #0284c7; }
+      .arrow-label { fill: #1f2937; }
+      .arrow-label-bg { fill: #fafafa; }
+    }
+  </style>
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#f59e0b"/>
+    </marker>
+    <marker id="arrowhead-blue" markerWidth="10" markerHeight="10" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#38bdf8"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" width="900" height="540"/>
+
+  <!-- d2p box -->
+  <rect class="box box-d2p" x="40" y="60" width="280" height="420"/>
+  <text class="kicker" x="60" y="90">Do-layer</text>
+  <text class="title title-do" x="60" y="118">d2p</text>
+  <text class="item" x="60" y="160">· Analyzer  · Planner</text>
+  <text class="item" x="60" y="186">· Parallel Executors</text>
+  <text class="item" x="60" y="212">· QA (regression corpus)</text>
+  <text class="item" x="60" y="238">· Verifier  (per spec)</text>
+  <line x1="60" y1="262" x2="300" y2="262" stroke="#475569" stroke-width="1"/>
+  <text class="kicker" x="60" y="288">runs on every dev machine</text>
+  <text class="item-mono" x="60" y="320">HUB_URL=...</text>
+  <text class="item-mono" x="60" y="342">HUB_TOKEN=...</text>
+  <text class="item-mono" x="60" y="364">python run.py demo/</text>
+  <text class="kicker" x="60" y="412">~8k LOC Python</text>
+  <text class="kicker" x="60" y="432">Claude / Codex / MiniMax</text>
+
+  <!-- Hub box -->
+  <rect class="box box-hub" x="580" y="60" width="280" height="420"/>
+  <text class="kicker" x="600" y="90">Observe-layer</text>
+  <text class="title title-observe" x="600" y="118">MatrixOmnix Hub</text>
+  <text class="item" x="600" y="160">· Hono /api/* ingest</text>
+  <text class="item" x="600" y="186">· SQLite (10 tables)</text>
+  <text class="item" x="600" y="212">· Learner: R1–R5 + LLM</text>
+  <text class="item" x="600" y="238">· Vue dashboard</text>
+  <line x1="600" y1="262" x2="840" y2="262" stroke="#475569" stroke-width="1"/>
+  <text class="kicker" x="600" y="288">one self-hosted process</text>
+  <text class="item-mono" x="600" y="320">pnpm hub:seed</text>
+  <text class="item-mono" x="600" y="342">pnpm hub:start</text>
+  <text class="item-mono" x="600" y="364">→ 127.0.0.1:3030</text>
+  <text class="kicker" x="600" y="412">~13k LOC TS · 271 tests</text>
+  <text class="kicker" x="600" y="432">Hono + Drizzle + Vue + Pinia</text>
+
+  <!-- Arrow: d2p → Hub (events) -->
+  <path class="arrow" d="M 330 180 Q 450 130, 570 180"/>
+  <rect class="arrow-label-bg" x="370" y="120" width="160" height="22" rx="4"/>
+  <text class="arrow-label" x="380" y="136">POST /api/events</text>
+
+  <!-- Arrow: Hub → d2p (standards pull, dashed) -->
+  <path class="arrow-back" d="M 570 360 Q 450 410, 330 360"/>
+  <rect class="arrow-label-bg" x="358" y="390" width="190" height="22" rx="4"/>
+  <text class="arrow-label" x="368" y="406">GET /api/standards (ETag)</text>
+
+  <!-- caption bottom -->
+  <text class="kicker" x="450" y="510" text-anchor="middle">slow loop: do → observe → learn → distribute</text>
+</svg>

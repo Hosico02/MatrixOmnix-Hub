@@ -81,16 +81,16 @@
 
         <div class="image-grid" aria-label="MatrixOmnix architecture diagrams">
           <figure>
-            <img src="./assets/framework-loop.png" alt="MatrixOmnix two-subsystem loop: d2p's Analyzer plans changes, Executors apply them, QA emits failing tests; lifecycle events flow to the Hub via /api/events. The Hub aggregates, learns, and serves updated standards back to d2p's verifier on the next run." />
-            <figcaption>Two subsystems · d2p produces, Hub observes + learns</figcaption>
+            <img src="./assets/framework-loop.svg" alt="The d2p ↔ Hub loop: d2p posts lifecycle events to the Hub via /api/events; the Hub serves approved standards back via /api/standards with ETag/304." />
+            <figcaption>Two subsystems · events flow right, standards flow left</figcaption>
           </figure>
           <figure>
-            <img src="./assets/harness-map.png" alt="MatrixOmnix harness coverage map: every product surface gated across three honest tiers — structural contract (always-on), behavioural runtime (skips when the surface's runtime lib is absent), and productization surface (operational maturity gates above runtime)." />
-            <figcaption>3 tiers · structural · behavioural · productization</figcaption>
+            <img src="./assets/hub-layers.svg" alt="Hub internal stack: three stacked layers — data (SQLite tables), learn (5 SQL rules plus weekly LLM pass produce proposals), decide (human approves proposals which become new standards versions)." />
+            <figcaption>3 layers · 数据 → 学习 → 决定</figcaption>
           </figure>
           <figure>
-            <img src="./assets/deployment-flow.png" alt="MatrixOmnix deployment: d2p runs on developer machines; Hub runs on one self-hosted Node process with a SQLite file; both connect via best-effort HTTP. Hub down means d2p uses cached standards and keeps running." />
-            <figcaption>Deployment · d2p anywhere, Hub one self-hosted process</figcaption>
+            <img src="./assets/deployment-flow.svg" alt="Deployment topology: many d2p instances all point at one self-hosted Hub. Fail-safe: Hub down means d2p uses cached standards and queues events locally; d2p down means the Hub is just an idle dashboard." />
+            <figcaption>Deployment · many d2p clients, one Hub process</figcaption>
           </figure>
         </div>
 
