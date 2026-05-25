@@ -35,12 +35,12 @@ describe('GET /runs/:id', () => {
   });
 
   it('404 for unknown', async () => {
-    const res = await app.request('/runs/nope');
+    const res = await app.request('/api/runs/nope');
     expect(res.status).toBe(404);
   });
 
   it('returns full nested structure', async () => {
-    const res = await app.request('/runs/r1');
+    const res = await app.request('/api/runs/r1');
     expect(res.status).toBe(200);
     const j = await res.json();
     expect(j.run.id).toBe('r1');

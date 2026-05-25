@@ -30,20 +30,20 @@ describe('proposals routes', () => {
   });
 
   it('GET /proposals returns pending', async () => {
-    const res = await app.request('/proposals?status=pending');
+    const res = await app.request('/api/proposals?status=pending');
     const j = await res.json();
     expect(j.items).toHaveLength(1);
     expect(j.items[0].id).toBe(propId);
   });
 
   it('GET /proposals/:id returns full', async () => {
-    const res = await app.request(`/proposals/${propId}`);
+    const res = await app.request(`/api/proposals/${propId}`);
     const j = await res.json();
     expect(j.proposal.archetype).toBe('fastapi-api');
   });
 
   it('POST decision approve creates new standards version', async () => {
-    const res = await app.request(`/proposals/${propId}/decision`, {
+    const res = await app.request(`/api/proposals/${propId}/decision`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ decision: 'approve' }),
@@ -58,7 +58,7 @@ describe('proposals routes', () => {
   });
 
   it('POST decision reject marks rejected, no new version', async () => {
-    const res = await app.request(`/proposals/${propId}/decision`, {
+    const res = await app.request(`/api/proposals/${propId}/decision`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ decision: 'reject', note: 'too noisy' }),

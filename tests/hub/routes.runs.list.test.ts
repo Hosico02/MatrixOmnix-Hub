@@ -32,7 +32,7 @@ describe('GET /runs', () => {
   });
 
   it('returns all 5 by default, newest first', async () => {
-    const res = await app.request('/runs');
+    const res = await app.request('/api/runs');
     expect(res.status).toBe(200);
     const j = await res.json();
     expect(j.items).toHaveLength(5);
@@ -41,19 +41,19 @@ describe('GET /runs', () => {
   });
 
   it('filters by archetype', async () => {
-    const res = await app.request('/runs?archetype=fastapi-api');
+    const res = await app.request('/api/runs?archetype=fastapi-api');
     const j = await res.json();
     expect(j.items.every((r: any) => r.detected_archetype === 'fastapi-api')).toBe(true);
   });
 
   it('filters by state', async () => {
-    const res = await app.request('/runs?state=RUNNING');
+    const res = await app.request('/api/runs?state=RUNNING');
     const j = await res.json();
     expect(j.items).toHaveLength(1);
   });
 
   it('limits via limit param', async () => {
-    const res = await app.request('/runs?limit=2');
+    const res = await app.request('/api/runs?limit=2');
     const j = await res.json();
     expect(j.items).toHaveLength(2);
   });

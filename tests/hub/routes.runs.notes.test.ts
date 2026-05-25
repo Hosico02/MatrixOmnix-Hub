@@ -26,7 +26,7 @@ describe('POST /runs/:id/notes', () => {
   });
 
   it('inserts a human note', async () => {
-    const res = await app.request('/runs/r1/notes', {
+    const res = await app.request('/api/runs/r1/notes', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ body_md: 'looks good', author: 'human' }),
@@ -38,7 +38,7 @@ describe('POST /runs/:id/notes', () => {
   });
 
   it('400 if body_md missing', async () => {
-    const res = await app.request('/runs/r1/notes', {
+    const res = await app.request('/api/runs/r1/notes', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({}),

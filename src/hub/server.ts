@@ -1,4 +1,7 @@
 import { Hono } from 'hono';
+import { serveStatic } from '@hono/node-server/serve-static';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import type { DbHandle } from './db/client.js';
 import { adminAuth } from './auth.js';
 import { adminRoute } from './routes/admin.js';
@@ -31,10 +34,15 @@ export function buildApp(handle: DbHandle, opts: AppOpts) {
 
   const lookup = makeInstanceLookup(handle);
   app.route('/', adminRoute(handle, opts.adminToken));
-  app.route('/', eventsRoute(handle, lookup));
-  app.route('/', standardsRoute(handle));
-  app.route('/', runsRoute(handle));
-  app.route('/', proposalsRoute(handle));
+  app.route('/api', eventsRoute(handle, lookup));
+  app.route('/api', standardsRoute(handle));
+  app.route('/api', runsRoute(handle));
+  app.route('/api', proposalsRoute(handle));
+
+  const sitePath = join(process.cwd(), 'site', 'dist');
+  if (existsSync(sitePath)) {
+    app.use('/*', serveStatic({ root: './site/dist' }));
+  }
 
   return app;
 }

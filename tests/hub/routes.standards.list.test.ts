@@ -32,7 +32,7 @@ describe('standards list + history', () => {
   });
 
   it('GET /standards returns list of archetypes', async () => {
-    const res = await app.request('/standards');
+    const res = await app.request('/api/standards');
     expect(res.status).toBe(200);
     const j = await res.json();
     expect(j.items).toHaveLength(1);
@@ -41,7 +41,7 @@ describe('standards list + history', () => {
   });
 
   it('GET /standards/:archetype/history returns version log', async () => {
-    const res = await app.request('/standards/fastapi-api/history');
+    const res = await app.request('/api/standards/fastapi-api/history');
     expect(res.status).toBe(200);
     const j = await res.json();
     expect(j.versions).toHaveLength(2);

@@ -24,7 +24,7 @@ describe('POST /events', () => {
   });
 
   it('401 without bearer', async () => {
-    const r = await app.request('/events', {
+    const r = await app.request('/api/events', {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ type: 'run_started', run_id: 'r1', payload: {} }),
     });
@@ -32,7 +32,7 @@ describe('POST /events', () => {
   });
 
   it('200 inserts event', async () => {
-    const r = await app.request('/events', {
+    const r = await app.request('/api/events', {
       method: 'POST',
       headers: { 'content-type': 'application/json', Authorization: `Bearer ${TOKEN}` },
       body: JSON.stringify({ type: 'run_started', run_id: 'r1', payload: { foo: 1 } }),
@@ -46,8 +46,8 @@ describe('POST /events', () => {
   it('duplicate same-payload is de-duped', async () => {
     const body = JSON.stringify({ type: 'iteration_complete', run_id: 'r1', payload: { iter: 1 } });
     const headers = { 'content-type': 'application/json', Authorization: `Bearer ${TOKEN}` };
-    await app.request('/events', { method: 'POST', headers, body });
-    await app.request('/events', { method: 'POST', headers, body });
+    await app.request('/api/events', { method: 'POST', headers, body });
+    await app.request('/api/events', { method: 'POST', headers, body });
     const rows = handle.db.select().from(events).all();
     expect(rows).toHaveLength(1);
   });

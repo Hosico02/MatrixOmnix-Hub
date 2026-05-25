@@ -25,7 +25,7 @@ describe('GET /standards/:archetype', () => {
   });
 
   it('200 returns current body + etag', async () => {
-    const res = await app.request(`/standards/${archetype}`);
+    const res = await app.request(`/api/standards/${archetype}`);
     expect(res.status).toBe(200);
     expect(res.headers.get('etag')).toBe('1');
     const j = await res.json();
@@ -34,14 +34,14 @@ describe('GET /standards/:archetype', () => {
   });
 
   it('304 when If-None-Match matches', async () => {
-    const res = await app.request(`/standards/${archetype}`, {
+    const res = await app.request(`/api/standards/${archetype}`, {
       headers: { 'If-None-Match': '1' },
     });
     expect(res.status).toBe(304);
   });
 
   it('404 when archetype unknown', async () => {
-    const res = await app.request('/standards/unknown-thing');
+    const res = await app.request('/api/standards/unknown-thing');
     expect(res.status).toBe(404);
   });
 });
