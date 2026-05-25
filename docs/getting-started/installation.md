@@ -1,8 +1,8 @@
 # Installation
 
 ```bash
-git clone https://github.com/Hosico02/demo2project.git
-cd demo2project
+git clone https://github.com/Hosico02/MatrixOmnix-Hub.git
+cd MatrixOmnix-Hub
 pnpm install
 pnpm build
 node dist/cli/index.js doctor

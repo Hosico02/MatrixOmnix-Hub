@@ -36,7 +36,7 @@ d2p is the **do-layer** — an LLM-driven Python orchestrator
 ([`Hosico02/d2p`](https://github.com/Hosico02/d2p)) that runs Analyzer → Planner →
 parallel Executors → QA and produces the actual code changes.
 
-MatrixOmnix Hub (`Hosico02/demo2project`, this repo) is the **observe + learn layer**:
+MatrixOmnix Hub (`Hosico02/MatrixOmnix-Hub`, this repo) is the **observe + learn layer**:
 
 1. **Ingest** — d2p pushes `run_started`, `iteration_complete`, `verdict_emitted`,
    `finding_recorded`, and `run_terminated` events over HTTP after each action.
