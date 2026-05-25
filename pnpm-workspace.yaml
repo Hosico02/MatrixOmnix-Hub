@@ -1,5 +1,6 @@
 packages:
   - site
+  - landing-app
 allowBuilds:
   better-sqlite3: true
   esbuild: true

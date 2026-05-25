@@ -126,18 +126,18 @@ Two separate web surfaces — keep them straight:
   Tailwind). Built into `site/dist` and served by the Hono backend at
   `http://127.0.0.1:3030`. Calls `/api/*` for live data — only works when
   paired with a running hub. Local use.
-- [`landing/`](landing/) — public static site, two pages:
-  - `landing/index.html` (`/`) — the **MatrixOmnix umbrella** intro (goal:
-    demo → verified product; two subsystems: d2p + Hub)
-  - `landing/hub/index.html` (`/hub`) — the **Hub detail** page
-  Deployed to <https://matrixomnix.vercel.app>. No backend dependency, no
-  XHR, no build step.
+- [`landing-app/`](landing-app/) — public **MatrixOmnix umbrella site**
+  (Vue 3 + Vite, multi-page: Home / About / Service / Contact). Deployed
+  to <https://matrixomnix.vercel.app>. The Service page documents how to
+  install and run the Hub + d2p. No backend dependency.
 
 ```bash
 pnpm site:dev           # Hub UI dev server (needs hub running on :3030)
 pnpm site:build         # Hub UI -> site/dist (bundled by hub:build)
-pnpm landing:preview    # Local preview of the public landing page
-pnpm landing:deploy     # vercel --prod
+pnpm landing:dev        # Umbrella site dev server (Vue, no backend needed)
+pnpm landing:build      # Umbrella site -> landing-app/dist
+pnpm landing:preview    # vite preview of built umbrella site
+pnpm landing:deploy     # build + vercel --prod
 ```
 
 ## License

@@ -30,8 +30,10 @@
     "site:dev": "pnpm --dir site dev",
     "site:build": "pnpm --dir site build",
     "site:preview": "pnpm --dir site preview",
-    "landing:preview": "npx --yes serve landing",
-    "landing:deploy": "npx --yes vercel deploy --prod --yes"
+    "landing:dev": "pnpm --dir landing-app dev",
+    "landing:build": "pnpm --dir landing-app build",
+    "landing:preview": "pnpm --dir landing-app preview",
+    "landing:deploy": "pnpm --dir landing-app build && npx --yes vercel deploy --prod --yes"
   },
   "devDependencies": {
     "@types/bcryptjs": "^3.0.0",
