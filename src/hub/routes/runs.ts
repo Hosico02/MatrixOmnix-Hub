@@ -1,7 +1,11 @@
 import { Hono } from 'hono';
 import { and, eq, desc, sql } from 'drizzle-orm';
+import { z } from 'zod';
+import { randomUUID } from 'node:crypto';
 import type { DbHandle } from '../db/client.js';
 import { runs, iterations, verdicts, findings, mentorNotes } from '../db/schema.js';
+
+const NoteBody = z.object({ body_md: z.string().min(1), author: z.enum(['human', 'llm']).default('human') });
 
 export function runsRoute(handle: DbHandle) {
   const r = new Hono();
@@ -81,6 +85,19 @@ export function runsRoute(handle: DbHandle) {
         id: n.id, author: n.author, body_md: n.bodyMd, created_at: n.createdAt,
       })),
     });
+  });
+
+  r.post('/runs/:id/notes', async (c) => {
+    const id = c.req.param('id');
+    const exists = handle.db.select().from(runs).where(eq(runs.id, id)).get();
+    if (!exists) return c.json({ error: 'run not found' }, 404);
+    const parsed = NoteBody.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: 'bad body' }, 400);
+    const noteId = randomUUID();
+    handle.db.insert(mentorNotes).values({
+      id: noteId, runId: id, author: parsed.data.author, bodyMd: parsed.data.body_md,
+    }).run();
+    return c.json({ note: { id: noteId, body_md: parsed.data.body_md } });
   });
 
   return r;
