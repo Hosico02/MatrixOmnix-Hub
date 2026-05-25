@@ -126,9 +126,12 @@ Two separate web surfaces — keep them straight:
   Tailwind). Built into `site/dist` and served by the Hono backend at
   `http://127.0.0.1:3030`. Calls `/api/*` for live data — only works when
   paired with a running hub. Local use.
-- [`landing/`](landing/) — a single static HTML page that introduces the
-  Hub publicly. Deployed to <https://matrixomnix.vercel.app>. No backend
-  dependency; no XHR; safe to ship anywhere.
+- [`landing/`](landing/) — public static site, two pages:
+  - `landing/index.html` (`/`) — the **MatrixOmnix umbrella** intro (goal:
+    demo → verified product; two subsystems: d2p + Hub)
+  - `landing/hub/index.html` (`/hub`) — the **Hub detail** page
+  Deployed to <https://matrixomnix.vercel.app>. No backend dependency, no
+  XHR, no build step.
 
 ```bash
 pnpm site:dev           # Hub UI dev server (needs hub running on :3030)
