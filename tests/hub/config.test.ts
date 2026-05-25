@@ -32,3 +32,43 @@ describe('hub config', () => {
     expect(loadConfig().llmLearnerEnabled).toBe(false);
   });
 });
+
+describe('runner config', () => {
+  const savedEnv = { ...process.env };
+  afterEach(() => {
+    process.env = { ...savedEnv };
+  });
+
+  it('runnerEnabled defaults to false', () => {
+    delete process.env.D2P_RUNNER_ENABLED;
+    delete process.env.HUB_ADMIN_TOKEN;
+    const cfg = loadConfig();
+    expect(cfg.runnerEnabled).toBe(false);
+  });
+
+  it('runnerEnabled true when D2P_RUNNER_ENABLED=1', () => {
+    process.env.D2P_RUNNER_ENABLED = '1';
+    const cfg = loadConfig();
+    expect(cfg.runnerEnabled).toBe(true);
+  });
+
+  it('runnerPathPrefixes defaults to $HOME + /tmp', () => {
+    delete process.env.HUB_RUNNER_PATH_PREFIX;
+    const cfg = loadConfig();
+    expect(cfg.runnerPathPrefixes.length).toBeGreaterThanOrEqual(2);
+    expect(cfg.runnerPathPrefixes).toContain('/tmp');
+  });
+
+  it('runnerPathPrefixes parses comma-separated env override', () => {
+    process.env.HUB_RUNNER_PATH_PREFIX = '/a,/b/c';
+    const cfg = loadConfig();
+    expect(cfg.runnerPathPrefixes).toEqual(['/a', '/b/c']);
+  });
+
+  it('hubDataDir defaults to dirname(dbPath)', () => {
+    process.env.HUB_DB_PATH = '/tmp/x/y/hub.db';
+    delete process.env.HUB_DATA_DIR;
+    const cfg = loadConfig();
+    expect(cfg.hubDataDir).toBe('/tmp/x/y');
+  });
+});
