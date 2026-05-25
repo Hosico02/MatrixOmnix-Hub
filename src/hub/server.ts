@@ -4,7 +4,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type { DbHandle } from './db/client.js';
 import { adminAuth } from './auth.js';
-import { adminRoute } from './routes/admin.js';
+import { adminRoute, type AnthropicLike } from './routes/admin.js';
 import { eventsRoute } from './routes/events.js';
 import { standardsRoute } from './routes/standards.js';
 import { runsRoute } from './routes/runs.js';
@@ -13,6 +13,9 @@ import { makeInstanceLookup } from './instanceLookup.js';
 
 export interface AppOpts {
   adminToken: string | null;
+  // Optional. When passed, /admin/learner/run-summariser invokes the LLM
+  // path with this client. Otherwise that route 503s.
+  anthropic?: AnthropicLike | null;
 }
 
 export function buildApp(handle: DbHandle, opts: AppOpts) {
@@ -33,7 +36,10 @@ export function buildApp(handle: DbHandle, opts: AppOpts) {
   );
 
   const lookup = makeInstanceLookup(handle);
-  app.route('/', adminRoute(handle, opts.adminToken));
+  app.route('/', adminRoute(handle, {
+    adminToken: opts.adminToken,
+    anthropic: opts.anthropic ?? null,
+  }));
   app.route('/api', eventsRoute(handle, lookup));
   app.route('/api', standardsRoute(handle));
   app.route('/api', runsRoute(handle));
