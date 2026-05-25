@@ -1,11 +1,5 @@
 {
-  "buildCommand": "pnpm --dir site build",
-  "outputDirectory": "site/dist",
-  "installCommand": "pnpm install --frozen-lockfile",
-  "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
-  ]
+  "outputDirectory": "landing",
+  "installCommand": "echo 'static landing — no install needed'",
+  "buildCommand": "echo 'static landing — no build needed'"
 }

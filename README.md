@@ -120,8 +120,22 @@ signals and the top alternatives.
 
 ## Web
 
-[`site/`](site/) — Vite/Vue app describing the MatrixOmnix Hub. Live at
-<https://matrixomnix.vercel.app>.
+Two separate web surfaces — keep them straight:
+
+- [`site/`](site/) — the **Hub UI itself** (Vue 3 + Pinia + Vue Router +
+  Tailwind). Built into `site/dist` and served by the Hono backend at
+  `http://127.0.0.1:3030`. Calls `/api/*` for live data — only works when
+  paired with a running hub. Local use.
+- [`landing/`](landing/) — a single static HTML page that introduces the
+  Hub publicly. Deployed to <https://matrixomnix.vercel.app>. No backend
+  dependency; no XHR; safe to ship anywhere.
+
+```bash
+pnpm site:dev           # Hub UI dev server (needs hub running on :3030)
+pnpm site:build         # Hub UI -> site/dist (bundled by hub:build)
+pnpm landing:preview    # Local preview of the public landing page
+pnpm landing:deploy     # vercel --prod
+```
 
 ## License
 
