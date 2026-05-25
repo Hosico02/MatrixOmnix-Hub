@@ -1,6 +1,0 @@
-{
-  "max_iterations": 3,
-  "stop_on_grade": "production_ready_baseline",
-  "no_progress_window": 2,
-  "default_provider": "mock"
-}

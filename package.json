@@ -1,29 +1,20 @@
 {
-  "name": "matrixomnix",
-  "version": "0.0.8",
+  "name": "matrixomnix-hub",
+  "version": "0.1.0",
   "type": "module",
   "packageManager": "pnpm@11.0.9",
-  "description": "MatrixOmnix turns demos into production-ready products via a multi-agent harness with verification and QA learning.",
+  "description": "PM + mentor cockpit for d2p productization runs. Hono + SQLite backend + Vue dashboard.",
   "license": "MIT",
   "bin": {
-    "matrixomnix": "./dist/cli/index.js",
-    "demo2project": "./dist/cli/index.js",
     "matrixomnix-hub": "./dist/hub/index.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/copy-assets.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
-    "demo2project": "node dist/cli/index.js",
-    "matrixomnix": "node dist/cli/index.js",
     "hub:dev": "tsx watch src/hub/index.ts",
     "hub:start": "node dist/hub/index.js",
     "hub:build": "tsc -p tsconfig.json && node scripts/copy-assets.mjs && pnpm site:build",
-    "analyze": "node dist/cli/index.js analyze",
-    "gap": "node dist/cli/index.js gap",
-    "archetype": "node dist/cli/index.js archetype",
-    "self-check": "node dist/cli/index.js self-check",
-    "init": "node dist/cli/index.js init",
     "hub:seed": "tsx src/hub/cli/seed.ts",
     "site:dev": "pnpm --dir site dev",
     "site:build": "pnpm --dir site build",
@@ -38,7 +29,6 @@
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.0.0",
     "drizzle-kit": "^0.31.10",
-    "tsup": "^8.5.1",
     "tsx": "^4.22.3",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"
@@ -55,7 +45,6 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.98.0",
     "@hono/node-server": "^2.0.3",
-    "@modelcontextprotocol/sdk": "^1.29.0",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^12.10.0",
     "drizzle-orm": "^0.45.2",

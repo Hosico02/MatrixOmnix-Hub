@@ -4,8 +4,6 @@
 
 MatrixOmnix Hub does not run iterations and does not modify projects. It is read-only relative to project code; it is read-write relative to standards (with human approval gates).
 
-`demo2project` remains as a backwards-compatible CLI alias for this repo.
-
 ## Quickstart
 
 ```bash
@@ -86,37 +84,6 @@ MatrixOmnix Hub (`Hosico02/MatrixOmnix-Hub`, this repo) is the **observe + learn
 | R3 | Median severity of a finding shifts | Propose adjusting severity weight |
 | R4 | Archetype mis-detection rate rises | Propose probe threshold tweak |
 | R5 | Same finding marked `wont_fix` repeatedly | Propose downgrading severity |
-
-## CLI reference
-
-The CLI is a thin wrapper retained for backwards compatibility and self-inspection:
-
-```bash
-matrixomnix init                              # Bootstrap config files
-matrixomnix doctor                            # Environment + config diagnose
-matrixomnix analyze --project <path>          # ProjectSnapshot + ProjectScore
-matrixomnix gap --project <path> [--fast]     # GapReport with evidence verification
-matrixomnix archetype --project <path>        # Detect project archetype
-matrixomnix qa:preflight --project <path>     # Load active QA cases
-matrixomnix qa:regression --project <path>    # Replay QA regression spec
-matrixomnix self-check                        # analyze/gap on this repo
-```
-
-## Archetype detection
-
-Project archetype is decided by a hybrid of declarative JSON probes
-(`config/archetypes/*.json`) and built-in TypeScript probes. Each probe
-scores positive and negative signals against a per-archetype threshold;
-the detector sorts by ratio, then raw signal weight, then max possible
-weight so a strict declarative library probe wins ties against a loose
-built-in one.
-
-```bash
-pnpm matrixomnix archetype --project /path/to/repo
-```
-
-prints the full probe scoresheet — primary archetype, confidence, detected
-signals and the top alternatives.
 
 ## Web
 

@@ -1,8 +1,6 @@
 #!/usr/bin/env node
 /**
  * Postbuild: copy non-TS assets that tsc ignores into dist/.
- *  - src/standards/{base,archetypes,learned}/*.json -> dist/standards/...
- *  - src/security/policy/*.json -> dist/security/policy/
  *  - src/hub/db/migrations/*.sql -> dist/hub/db/migrations/ (Hub runtime needs them)
  */
 import { promises as fs } from 'node:fs';
@@ -30,10 +28,6 @@ async function copyDir(src, dst) {
 }
 
 const pairs = [
-  ['src/standards/base', 'dist/standards/base'],
-  ['src/standards/archetypes', 'dist/standards/archetypes'],
-  ['src/standards/learned', 'dist/standards/learned'],
-  ['src/security/policy', 'dist/security/policy'],
   ['src/hub/db/migrations', 'dist/hub/db/migrations'],
 ];
 let copied = 0;
