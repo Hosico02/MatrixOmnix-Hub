@@ -17,6 +17,7 @@ onMounted(() => { refresh(); setInterval(refresh, 30_000); });
   <nav class="border-b bg-white px-4 py-3 flex gap-6 items-center sticky top-0 z-10">
     <span class="font-bold text-lg">MatrixOmnix Hub</span>
     <router-link to="/" class="hover:underline">运行</router-link>
+    <router-link to="/iterate" class="hover:underline">迭代</router-link>
     <router-link to="/standards" class="hover:underline">规则</router-link>
     <router-link to="/mentor" class="hover:underline flex items-center gap-1">
       <span>待办</span>

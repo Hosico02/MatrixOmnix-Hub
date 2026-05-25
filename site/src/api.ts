@@ -42,3 +42,61 @@ export const api = {
     post<{ new_standard_version_id: string | null }>(`/proposals/${id}/decision`,
       { decision, ...opts }),
 };
+
+const ADMIN_BASE = '/admin';
+
+function adminHeaders(token: string) {
+  return { 'content-type': 'application/json',
+           Authorization: `Bearer ${token}` };
+}
+
+export interface StartRunReq { project_path: string; iter: number }
+export interface StartRunRes { run_id: string; pid: number; stdout_log: string }
+export interface CurrentRunRes {
+  run_id: string | null;
+  pid?: number; project_path?: string; started_at?: string;
+}
+export interface StdoutRes { content: string; next_offset: number; eof: boolean }
+export interface PushReq {
+  remote_url: string; branch: string; commit_message: string;
+}
+export interface PushRes {
+  steps: Array<{ cmd: string; exit: number; output: string }>;
+  ok: boolean; remote_html: string | null;
+}
+
+export const adminApi = {
+  startRun: async (token: string, body: StartRunReq): Promise<StartRunRes> => {
+    const r = await fetch(`${ADMIN_BASE}/runs/start`, {
+      method: 'POST', headers: adminHeaders(token), body: JSON.stringify(body),
+    });
+    if (!r.ok) throw await asError(r);
+    return r.json();
+  },
+  currentRun: async (token: string): Promise<CurrentRunRes> => {
+    const r = await fetch(`${ADMIN_BASE}/runs/current`,
+                          { headers: { Authorization: `Bearer ${token}` } });
+    if (!r.ok) throw await asError(r);
+    return r.json();
+  },
+  stdout: async (token: string, runId: string, from: number): Promise<StdoutRes> => {
+    const r = await fetch(`${ADMIN_BASE}/runs/${runId}/stdout?from=${from}`,
+                          { headers: { Authorization: `Bearer ${token}` } });
+    if (!r.ok) throw await asError(r);
+    return r.json();
+  },
+  pushGithub: async (token: string, runId: string, body: PushReq): Promise<PushRes> => {
+    const r = await fetch(`${ADMIN_BASE}/runs/${runId}/push-github`, {
+      method: 'POST', headers: adminHeaders(token), body: JSON.stringify(body),
+    });
+    // Push intentionally returns 200 or 500 with a JSON body; surface both.
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok && !j?.steps) throw new Error(`push failed: ${r.status}`);
+    return j;
+  },
+};
+
+async function asError(r: Response): Promise<Error> {
+  const text = await r.text().catch(() => '');
+  return new Error(`${r.status} ${r.statusText}: ${text.slice(0, 200)}`);
+}
