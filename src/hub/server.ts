@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { serveStatic } from '@hono/node-server/serve-static';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { DbHandle } from './db/client.js';
 import { adminAuth } from './auth.js';
@@ -59,6 +59,21 @@ export function buildApp(handle: DbHandle, opts: AppOpts) {
   const sitePath = join(process.cwd(), 'site', 'dist');
   if (existsSync(sitePath)) {
     app.use('/*', serveStatic({ root: './site/dist' }));
+    // SPA history fallback: any GET that didn't match a real file or an
+    // API/admin route gets the SPA's index.html, so client-side routes
+    // like /iterate or /runs/:id survive a hard refresh. Skip /api/* and
+    // /admin/* so missing backend routes still 404 cleanly.
+    const indexPath = join(sitePath, 'index.html');
+    if (existsSync(indexPath)) {
+      const indexHtml = readFileSync(indexPath, 'utf-8');
+      app.get('*', (c) => {
+        const p = new URL(c.req.url).pathname;
+        if (p.startsWith('/api/') || p.startsWith('/admin/')) {
+          return c.notFound();
+        }
+        return c.html(indexHtml);
+      });
+    }
   }
 
   return app;
