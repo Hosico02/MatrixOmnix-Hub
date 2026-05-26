@@ -31,6 +31,16 @@ watch(() => store.adminToken, (t) => {
   if (t) tryStart();
 });
 
+// If the composable transitions to needs_token (e.g. saved token rotated
+// and Hub rejected it), clear the stale token from the store so the
+// TokenGate surfaces "fresh" rather than appearing to have nothing set
+// while the bad token still sits in localStorage.
+watch(() => logs.state.value, (s) => {
+  if (s === 'needs_token' && store.adminToken) {
+    store.clearToken();
+  }
+});
+
 // Auto-scroll: append → next tick → scroll to bottom if autoScroll on.
 watch(() => logs.buffer.value, async () => {
   if (!autoScroll.value || !scrollHost.value) return;

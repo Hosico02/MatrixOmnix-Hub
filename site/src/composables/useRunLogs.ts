@@ -36,7 +36,7 @@ export function useRunLogs() {
     try {
       res = await fetch(
         `${ADMIN_BASE}/runs/${runId}/stdout?from=${nextOffset.value}`,
-        { headers: { 'x-admin-token': token } },
+        { headers: { Authorization: `Bearer ${token}` } },
       );
     } catch (e) {
       state.value = 'error';

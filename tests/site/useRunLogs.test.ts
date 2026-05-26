@@ -40,6 +40,21 @@ describe('useRunLogs', () => {
     log.stop();
   });
 
+  it('sends Authorization: Bearer <token> header (matches Hub adminAuth)', async () => {
+    const fetch = mockFetchSeq({
+      status: 200,
+      json: { content: '', next_offset: 0, eof: true },
+    });
+    const log = useRunLogs();
+    void log.start('r1', 'sekret');
+    await vi.runOnlyPendingTimersAsync();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const init = fetch.mock.calls[0][1] as RequestInit;
+    expect((init.headers as Record<string, string>).Authorization)
+      .toBe('Bearer sekret');
+    log.stop();
+  });
+
   it('appends content across polls and stops at eof', async () => {
     const fetch = mockFetchSeq(
       { status: 200, json: { content: 'a', next_offset: 1, eof: false } },

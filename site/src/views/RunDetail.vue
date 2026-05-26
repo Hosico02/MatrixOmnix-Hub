@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { api } from '../api';
 import OverviewTab from './run-detail/OverviewTab.vue';
@@ -27,10 +27,32 @@ function select(k: TabKey) {
   router.replace({ hash: `#${k}` });
 }
 
+const REFRESH_INTERVAL_MS = 30_000;
+let refreshTimer: number | null = null;
+
 async function load() {
   data.value = await api.getRun(route.params.id as string);
+  // Keep milestones fresh while the run is still going so iterations
+  // flip from "进行中" to "完成" without a manual refresh.
+  scheduleNextRefresh();
 }
+
+function scheduleNextRefresh() {
+  if (refreshTimer != null) {
+    window.clearTimeout(refreshTimer);
+    refreshTimer = null;
+  }
+  if (data.value?.run?.terminated_at != null) return;
+  refreshTimer = window.setTimeout(() => { void load(); }, REFRESH_INTERVAL_MS);
+}
+
 onMounted(load);
+onBeforeUnmount(() => {
+  if (refreshTimer != null) {
+    window.clearTimeout(refreshTimer);
+    refreshTimer = null;
+  }
+});
 
 const runId = computed(() => route.params.id as string);
 </script>

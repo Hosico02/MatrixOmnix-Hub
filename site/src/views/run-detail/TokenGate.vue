@@ -13,7 +13,7 @@ const errorMsg = ref('');
 
 async function probe(token: string): Promise<boolean> {
   const r = await fetch('/admin/runs/current',
-    { headers: { 'x-admin-token': token } });
+    { headers: { Authorization: `Bearer ${token}` } });
   return r.status === 200 || r.status === 204;
 }
 
