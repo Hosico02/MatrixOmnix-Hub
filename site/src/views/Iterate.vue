@@ -18,8 +18,49 @@ const commitMsg = ref('');
 const pushing = ref(false);
 const pushResult = ref<any | null>(null);
 
-function saveToken() {
-  store.setToken(tokenInput.value);
+// Token-gate validation state. saveToken probes /admin/runs/current —
+// if Hub rejects, we surface tokenError and refuse to persist. Avoids
+// the previous footgun where any non-empty string passed the gate and
+// later 403s were silently swallowed by runner.attach().
+const tokenError = ref<string | null>(null);
+const validatingToken = ref(false);
+
+async function probeAdmin(token: string): Promise<Response> {
+  return fetch('/admin/runs/current', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+async function saveToken() {
+  tokenError.value = null;
+  const candidate = tokenInput.value.trim();
+  if (!candidate) {
+    tokenError.value = 'Token cannot be empty.';
+    return;
+  }
+  validatingToken.value = true;
+  try {
+    const r = await probeAdmin(candidate);
+    if (r.status === 401 || r.status === 403) {
+      tokenError.value = 'Wrong token. Hub rejected it (' + r.status + ').';
+      return;
+    }
+    if (!r.ok) {
+      tokenError.value = 'Hub responded ' + r.status + '. Cannot validate.';
+      return;
+    }
+    store.setToken(candidate);
+  } catch (e: any) {
+    tokenError.value = 'Cannot reach Hub: ' + (e?.message ?? String(e));
+  } finally {
+    validatingToken.value = false;
+  }
+}
+
+function resetToken() {
+  store.clearToken();
+  tokenInput.value = '';
+  tokenError.value = null;
 }
 
 async function onStart() {
@@ -56,9 +97,24 @@ function onPushOpen() {
   if (!commitMsg.value) commitMsg.value = suggestedMsg.value;
 }
 
-onMounted(() => {
-  // Try to reattach to an in-flight run if there is one.
-  if (store.adminToken) void runner.attach();
+onMounted(async () => {
+  if (!store.adminToken) return;
+  // Validate the stored token against Hub before trusting it. If Hub
+  // rejects, clear it and surface the gate again with an explanatory
+  // error. If Hub is unreachable (network down / not running), leave the
+  // token in place — the real errors will surface on subsequent calls.
+  try {
+    const r = await probeAdmin(store.adminToken);
+    if (r.status === 401 || r.status === 403) {
+      resetToken();
+      tokenError.value = 'Stored token was rejected by Hub. Please re-enter.';
+      return;
+    }
+  } catch {
+    // Hub unreachable — proceed with stored token; downstream errors
+    // will explain.
+  }
+  void runner.attach();
 });
 </script>
 
@@ -70,15 +126,20 @@ onMounted(() => {
       <p class="text-sm text-gray-700 mb-3">
         The /iterate page calls admin-gated routes. Paste the
         <code>HUB_ADMIN_TOKEN</code> the Hub was started with.
-        It is stored only in this browser's localStorage.
+        It is stored only in this browser's localStorage and validated
+        against Hub before being saved.
       </p>
       <div class="flex gap-2">
         <input v-model="tokenInput" type="password" placeholder="admin token"
-               class="flex-1 border rounded px-3 py-2 text-sm" />
-        <button @click="saveToken" class="px-4 py-2 bg-gray-900 text-white rounded text-sm">
-          Save
+               :disabled="validatingToken"
+               @keyup.enter="saveToken"
+               class="flex-1 border rounded px-3 py-2 text-sm disabled:opacity-50" />
+        <button @click="saveToken" :disabled="validatingToken"
+                class="px-4 py-2 bg-gray-900 text-white rounded text-sm disabled:opacity-50">
+          {{ validatingToken ? 'Checking…' : 'Save' }}
         </button>
       </div>
+      <p v-if="tokenError" class="mt-2 text-sm text-red-700">{{ tokenError }}</p>
     </section>
 
     <!-- Setup -->
@@ -101,6 +162,9 @@ onMounted(() => {
                 class="px-4 py-2 bg-emerald-600 text-white rounded text-sm disabled:opacity-50">
           Run d2p
         </button>
+      </div>
+      <div class="mt-3 pt-3 border-t text-xs text-gray-500">
+        <button @click="resetToken" class="underline">Reset admin token</button>
       </div>
     </section>
 
