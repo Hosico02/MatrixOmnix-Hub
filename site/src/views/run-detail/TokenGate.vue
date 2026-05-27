@@ -12,7 +12,9 @@ const checking = ref(false);
 const errorMsg = ref('');
 
 async function probe(token: string): Promise<boolean> {
-  const r = await fetch('/admin/runs/current',
+  // /admin/health mounts unconditionally; /admin/runs/current only mounts
+  // when D2P_RUNNER_ENABLED=1, which isn't required for log viewing.
+  const r = await fetch('/admin/health',
     { headers: { Authorization: `Bearer ${token}` } });
   return r.status === 200 || r.status === 204;
 }
