@@ -30,6 +30,15 @@ export function migrate(sqlite: Database.Database) {
       .replace(/CREATE TABLE `/g, 'CREATE TABLE IF NOT EXISTS `')
       .replace(/CREATE UNIQUE INDEX `/g, 'CREATE UNIQUE INDEX IF NOT EXISTS `')
       .replace(/CREATE INDEX `/g, 'CREATE INDEX IF NOT EXISTS `');
-    sqlite.exec(idempotentSql);
+    try {
+      sqlite.exec(idempotentSql);
+    } catch (e) {
+      // SQLite has no `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`. Tolerate
+      // "duplicate column" on re-runs so this framework's "every-boot
+      // re-apply" model keeps working for additive ALTER migrations.
+      const msg = String((e as { message?: string })?.message ?? '');
+      if (/duplicate column name/i.test(msg)) continue;
+      throw e;
+    }
   }
 }
