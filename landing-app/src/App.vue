@@ -31,7 +31,7 @@
             </div>
 
             <p class="subcopy">
-              MatrixOmnix turns a rough demo into a verified product. Two subsystems work together: <strong>d2p</strong> drives the demo through analyzer / planner / parallel executors / QA to produce changes, and <strong>MatrixOmnix Hub</strong> observes every run, learns standards drift over time, and surfaces decisions to a human via a 中文 Vue dashboard. Loose-coupled today; the loop is data → learning → distribution.
+              MatrixOmnix turns a rough demo into a verified product. Two subsystems work together: <strong>d2p</strong> drives the demo through analyzer / planner / parallel executors / QA to produce changes, and <strong>MatrixOmnix Hub</strong> observes every run, learns standards drift over time, and surfaces decisions to a human via a 中文 Vue dashboard. Loose-coupled today; the loop is data → learning → distribution. A third sibling, <strong><a class="subcopy-link" href="https://matrixomnixpaper.vercel.app" target="_blank" rel="noopener">MatrixOmnix Paper</a></strong>, applies the same multi-agent philosophy to a different surface — predicting venue-level acceptance for academic papers across every domain.
             </p>
           </div>
         </section>
@@ -58,9 +58,9 @@
               The do-layer (d2p) and the observe-layer (Hub) are deliberately decoupled. d2p reads the demo, plans tasks, runs parallel Executors, generates failing tests as permanent regression guardrails — and pushes <code>run_started</code> / <code>iteration_complete</code> / <code>verdict_emitted</code> / <code>finding_recorded</code> events to the Hub over HTTP. The Hub aggregates events across all projects, runs 5 SQL learner rules + a weekly Opus pass to detect standards drift, and surfaces proposed rule changes into a 中文 inbox. You approve; the new standards land in <code>standard_versions</code>; next time d2p's verifier polls <code>/standards/:archetype</code>, it gets the new version.
             </p>
             <ul class="sibling-card__bullets">
-              <li><strong>d2p</strong> · ~8k LOC Python · LLM-driven, no hardcoded demo-type detectors · Claude / Codex / MiniMax</li>
-              <li><strong>Hub</strong> · ~13k LOC TypeScript · Hono + SQLite + Drizzle backend · Vue 3 + Pinia + Tailwind dashboard · 271 tests</li>
-              <li><strong>integration</strong> · HTTP best-effort with bcrypt-hashed per-instance bearer tokens; ETag/304 on standards pull</li>
+              <li><strong>d2p</strong> · ~14k LOC Python · LLM-driven, no hardcoded demo-type detectors · Claude / Codex / MiniMax with per-role model routing</li>
+              <li><strong>Hub</strong> · ~13k LOC TypeScript · Hono + SQLite + Drizzle backend · Vue 3 + Pinia + Tailwind dashboard · full vitest + pytest suite green</li>
+              <li><strong>integration</strong> · HTTP best-effort with bcrypt-hashed per-instance bearer tokens; ETag/304 on standards pull; lifecycle events stream over <code>/api/events</code></li>
               <li><strong>fail-safe</strong> · Hub down → d2p uses cached or baked standards · d2p down → Hub is just an idle dashboard</li>
               <li><strong>governance</strong> · every standards change goes through human approval; rejections weakly damp future proposals</li>
             </ul>
@@ -72,11 +72,38 @@
             </a>
           </div>
         </section>
+
+        <section class="sibling-card sibling-card--paper" aria-label="Sibling project: MatrixOmnix Paper">
+          <div class="sibling-card__body">
+            <div class="sibling-card__kicker">Sibling project</div>
+            <h2 class="sibling-card__title">
+              <a href="https://matrixomnixpaper.vercel.app" target="_blank" rel="noopener">MatrixOmnix Paper</a> — multi-agent acceptance predictor for academic papers
+            </h2>
+            <p class="sibling-card__copy">
+              Paper is the third project in the MatrixOmnix family, independent from the d2p ↔ Hub loop. It applies the same multi-agent ethos to a different problem: given a paper and a target venue, a jury of domain-expert critics (Novelty, Methodology, Clarity) debates and produces a calibrated per-venue acceptance probability — with explicit agent disagreements as the explanation, not just a score. Works across every domain (CS, Physics, Bio, Med, Econ, SocSci), not the CS-only narrow box of existing predictors.
+            </p>
+            <ul class="sibling-card__bullets">
+              <li><strong>stack</strong> · FastAPI + Anthropic + MiniMax backend · Vue 3 + Vite + Pinia + Tailwind SPA · SQLite for predictions</li>
+              <li><strong>inputs</strong> · arXiv URL or direct PDF upload; wizard-style 5-step submission</li>
+              <li><strong>deployment</strong> · hosted frontend at <a href="https://matrixomnixpaper.vercel.app" target="_blank" rel="noopener">matrixomnixpaper.vercel.app</a>; backend self-hostable</li>
+              <li><strong>shape today</strong> · ~2k LOC source · CS + Physics experts shipping · Bio / Med experts in progress · pytest green</li>
+              <li><strong>relationship</strong> · same brand, same multi-agent philosophy, separate codebase — no shared imports with d2p or Hub</li>
+            </ul>
+            <div class="sibling-card__ctas">
+              <a class="sibling-card__cta" href="https://matrixomnixpaper.vercel.app" target="_blank" rel="noopener">
+                Open the hosted UI →
+              </a>
+              <a class="sibling-card__cta sibling-card__cta--ghost" href="https://github.com/Hosico02/MatrixOmnix-Paper" target="_blank" rel="noopener">
+                View on GitHub →
+              </a>
+            </div>
+          </div>
+        </section>
       </template>
 
       <section v-else-if="page === 'about'" class="content-page about-page" id="about">
         <PageHeading kicker="About" title="MatrixOmnix is a goal, not a single tool.">
-          The goal: turn a rough demo into a verified product. Current implementation: <strong>d2p</strong> (LLM-driven Python orchestrator that produces changes) plus <strong>MatrixOmnix Hub</strong> (TypeScript backend + Vue dashboard that observes runs, learns standards drift, and gates rule changes through human approval). Two repos, deliberately decoupled. d2p is the engine; Hub is the cockpit.
+          The goal: turn a rough demo into a verified product. Current implementation: <strong>d2p</strong> (LLM-driven Python orchestrator that produces changes) plus <strong>MatrixOmnix Hub</strong> (TypeScript backend + Vue dashboard that observes runs, learns standards drift, and gates rule changes through human approval). Two repos, deliberately decoupled. d2p is the engine; Hub is the cockpit. A third project, <strong>MatrixOmnix Paper</strong>, lives outside that loop and reuses the multi-agent ethos for a different surface — venue-level acceptance prediction for academic papers across every domain.
         </PageHeading>
 
         <div class="image-grid" aria-label="MatrixOmnix architecture diagrams">
@@ -119,31 +146,49 @@
               Both subsystems are independently usable. d2p with no Hub configured falls back to baked standards and runs as before. Hub with no d2p connected is just an idle dashboard. The contract is one HTTP token + a handful of event shapes — no shared imports, no shared state. The split exists because the cockpit's job (memory + governance) is fundamentally different from the engine's job (produce changes now).
             </p>
           </article>
+          <article>
+            <h2>What MatrixOmnix Paper does</h2>
+            <p>
+              Paper is the third project in the family, independent from the d2p ↔ Hub loop. It applies the same multi-agent design to academic paper review: a paper plus a target venue goes in, a jury of domain-expert critics (Novelty, Methodology, Clarity) deliberates, and a calibrated per-venue acceptance probability comes out. Explainability-first: the critics' disagreements ARE the explanation, not a derived summary. It covers every domain (CS, Physics, Bio, Med, Econ, SocSci), not just CS like existing predictors. Tech stack: FastAPI + Anthropic + MiniMax on the backend, Vue 3 + Vite + Pinia + Tailwind on the frontend, SQLite for stored predictions, deployed at <a href="https://matrixomnixpaper.vercel.app" target="_blank" rel="noopener">matrixomnixpaper.vercel.app</a>. No shared imports with d2p or Hub — just shared philosophy and brand.
+            </p>
+          </article>
         </section>
 
         <section class="text-grid" aria-label="Current shape and roadmap">
           <article>
             <h2>Current shape</h2>
             <p>
-              Two repos under the MatrixOmnix umbrella: <code>Hosico02/d2p</code> (the do-layer, ~8k LOC Python) and <code>Hosico02/MatrixOmnix-Hub</code> (the observe-layer, ~13k LOC TypeScript + Vue). Both open source. Hub's vitest + Python HubClient pytest report 271/271 passing.
+              Three repos under the MatrixOmnix umbrella: <code>Hosico02/d2p</code> (the do-layer, ~14k LOC Python), <code>anzy-renlab-ai/MatrixOmnix-Hub</code> (the observe-layer, ~13k LOC TypeScript + Vue), and <code>Hosico02/MatrixOmnix-Paper</code> (the sibling, ~2k LOC across FastAPI backend + Vue SPA, hosted at matrixomnixpaper.vercel.app). All open source; all test suites currently green.
             </p>
           </article>
           <article>
             <h2>Where it's headed</h2>
             <p>
-              v0.1 is the foundation: Hub stores events, runs learner rules, gates approvals. The next milestone is d2p's internal Verifier (see the design spec in the Hub repo) — once shipped, the loop closes end-to-end. Until then, the Hub can already accumulate run data from any d2p execution and surface initial pattern proposals.
+              v0.1 is the foundation: Hub stores events, runs learner rules, gates approvals. The next milestone for the loop is d2p's internal Verifier (calibration harness already lives on a branch in d2p; merge pending real-data tuning) — once shipped, the loop closes end-to-end. In parallel, Paper is expanding its domain-expert roster (Bio and Medicine experts in progress) and working toward calibration against real venue-acceptance data.
             </p>
           </article>
         </section>
 
-        <a class="repo-link" href="https://github.com/Hosico02/MatrixOmnix-Hub" target="_blank" rel="noreferrer">
-          Hub repository: github.com/Hosico02/MatrixOmnix-Hub
-        </a>
+        <div class="repo-links">
+          <a class="repo-link" href="https://github.com/anzy-renlab-ai/MatrixOmnix-Hub" target="_blank" rel="noreferrer">
+            Hub repository: github.com/anzy-renlab-ai/MatrixOmnix-Hub
+          </a>
+          <a class="repo-link" href="https://github.com/Hosico02/d2p" target="_blank" rel="noreferrer">
+            d2p repository: github.com/Hosico02/d2p
+          </a>
+          <a class="repo-link" href="https://github.com/Hosico02/MatrixOmnix-Paper" target="_blank" rel="noreferrer">
+            Paper repository: github.com/Hosico02/MatrixOmnix-Paper
+          </a>
+        </div>
+
+        <p class="about-footnote">
+          d2p is being renamed to <strong>MatrixOmnix Forge</strong>; the repository URL keeps the <code>d2p</code> slug to avoid breaking existing tools and pinned references. Both names refer to the same project.
+        </p>
       </section>
 
       <section v-else-if="page === 'service'" class="content-page service-page" id="service">
         <PageHeading kicker="Service" title="How to run MatrixOmnix today.">
-          MatrixOmnix is two open-source repos, not a hosted service. Run the Hub on one machine (self-host or localhost); run d2p anywhere it has network to the Hub. d2p auto-reports run events; the Hub aggregates, learns, and gates standards changes through a 中文 approval inbox.
+          MatrixOmnix is self-host first. The d2p ↔ Hub loop is two open-source repos: run the Hub on one machine (self-host or localhost), run d2p anywhere it has network to the Hub. d2p auto-reports run events; the Hub aggregates, learns, and gates standards changes through a 中文 approval inbox. The sibling, <strong>MatrixOmnix Paper</strong>, ships with a hosted UI at <a href="https://matrixomnixpaper.vercel.app" target="_blank" rel="noopener">matrixomnixpaper.vercel.app</a> — open it in a browser and submit a paper, no install needed.
         </PageHeading>
 
         <section class="service-layout" data-service-guide>
@@ -153,7 +198,7 @@
               Two independent repos. The Hub is Node + SQLite + Vue (one process, one file); d2p is Python. They communicate over HTTP — Hub serves <code>/api/*</code>, d2p uses <code>HUB_URL</code> + <code>HUB_TOKEN</code> env vars.
             </p>
             <code># Hub (self-host once)</code>
-            <code>git clone https://github.com/Hosico02/MatrixOmnix-Hub</code>
+            <code>git clone https://github.com/anzy-renlab-ai/MatrixOmnix-Hub</code>
             <code>cd MatrixOmnix-Hub && pnpm install && pnpm hub:build</code>
             <code>HUB_DB_PATH=~/.matrixomnix/hub.db pnpm hub:seed   # one-time: creates token</code>
             <code>HUB_ADMIN_TOKEN=$(openssl rand -hex 16) pnpm hub:start</code>
@@ -174,7 +219,7 @@
 
         <code class="command-strip">pnpm hub:start  &amp;&amp;  HUB_URL=http://localhost:3030 python run.py ./your-demo</code>
         <p class="service-footnote">
-          Two repos, one slow loop. <a href="https://github.com/Hosico02/d2p" target="_blank" rel="noopener">d2p</a> · <a href="https://github.com/Hosico02/MatrixOmnix-Hub" target="_blank" rel="noopener">Hub</a>.
+          Two repos, one slow loop. <a href="https://github.com/Hosico02/d2p" target="_blank" rel="noopener">d2p</a> · <a href="https://github.com/anzy-renlab-ai/MatrixOmnix-Hub" target="_blank" rel="noopener">Hub</a>. Plus the hosted sibling: <a href="https://matrixomnixpaper.vercel.app" target="_blank" rel="noopener">MatrixOmnix Paper</a>.
         </p>
       </section>
 
@@ -188,9 +233,17 @@
             <span>Do-layer · d2p</span>
             <strong>github.com/Hosico02/d2p</strong>
           </a>
-          <a href="https://github.com/Hosico02/MatrixOmnix-Hub" target="_blank" rel="noreferrer">
+          <a href="https://github.com/anzy-renlab-ai/MatrixOmnix-Hub" target="_blank" rel="noreferrer">
             <span>Observe-layer · Hub</span>
-            <strong>github.com/Hosico02/MatrixOmnix-Hub</strong>
+            <strong>github.com/anzy-renlab-ai/MatrixOmnix-Hub</strong>
+          </a>
+          <a href="https://github.com/Hosico02/MatrixOmnix-Paper" target="_blank" rel="noreferrer">
+            <span>Sibling · MatrixOmnix Paper</span>
+            <strong>github.com/Hosico02/MatrixOmnix-Paper</strong>
+          </a>
+          <a href="https://matrixomnixpaper.vercel.app" target="_blank" rel="noreferrer">
+            <span>Try Paper · hosted UI</span>
+            <strong>matrixomnixpaper.vercel.app</strong>
           </a>
           <a href="https://github.com/Hosico02" target="_blank" rel="noreferrer">
             <span>Owner</span>

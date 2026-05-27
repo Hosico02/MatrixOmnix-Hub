@@ -681,6 +681,48 @@ input:focus-visible,
   color: #fff;
 }
 
+.sibling-card__ctas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.sibling-card__cta--ghost {
+  background: transparent;
+}
+
+.sibling-card__cta--ghost:hover {
+  background: #111;
+  color: #fff;
+}
+
+.sibling-card--paper {
+  border-top: 1px solid var(--line);
+}
+
+.subcopy-link {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.subcopy-link:hover {
+  text-decoration-thickness: 2px;
+}
+
+.repo-links {
+  display: grid;
+  gap: 4px;
+}
+
+.about-footnote {
+  margin-top: 24px;
+  font-size: 0.85rem;
+  color: var(--muted);
+  font-style: italic;
+}
+
 @media (max-width: 720px) {
   .sibling-card {
     padding: 56px 0 64px;
