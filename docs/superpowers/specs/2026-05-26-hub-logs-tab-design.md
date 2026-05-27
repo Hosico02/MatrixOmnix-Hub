@@ -295,3 +295,10 @@ Manual smoke (not automated):
 ---
 
 End of design. Ready for user review; on approval, advance to writing-plans.
+
+---
+
+**Follow-up**: external (non-Hub-spawned) d2p runs are made visible by
+`2026-05-27-hub-d2p-log-integration-design.md`. No frontend changes;
+backend-only.
+
