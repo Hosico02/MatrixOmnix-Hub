@@ -94,8 +94,10 @@ flushed (no Python output buffering, no `subprocess` buffer accumulation)
 or the tab will appear to stall for many seconds at a time.
 
 **Termination**: d2p sends `run_terminated` synchronously before process
-exit. Hub uses `runs.terminalState != null` to gate the stdout endpoint's
-`eof` flag (§6.3).
+exit. Hub uses `runs.terminatedAt != null` to gate the stdout endpoint's
+`eof` flag (§5.3). (`terminalState` is set to `'RUNNING'` on
+`run_started` already, so it's not the right signal; `terminatedAt`
+stays NULL until termination.)
 
 **Event payload schemas**:
 
@@ -184,12 +186,12 @@ New logic:
 
 ```ts
 const isLive = cur?.runId === id
-            || (runsRow != null && runsRow.terminalState == null);
+            || (runsRow != null && runsRow.terminatedAt == null);
 const eof = (from + chunkSize >= size) && !isLive;
 ```
 
-A run is "live" if it's currently Hub-spawned, OR it has a DB row with no
-terminal state (external run that hasn't sent `run_terminated` yet).
+A run is "live" if it's currently Hub-spawned, OR it has a DB row with
+no `terminatedAt` (external run that hasn't sent `run_terminated` yet).
 
 ### 5.4 No frontend changes
 
@@ -210,7 +212,7 @@ covers the "live run, milestones go stale" case.
 | `run_started` missing `stdout_path` | `stdoutPath` column stays NULL → fallback to `runner-logs/<id>.log` → 404 → "no log". No crash |
 | `run_started` arrives twice for same id | Ingest is upsert; second one overwrites. Idempotent |
 | Hub process restarts mid-run | DB persists; stdout endpoint resumes from file offset. No state lost |
-| d2p crashes without sending `run_terminated` | `terminalState` stays null → endpoint never returns eof=true → tab polls forever. **Known limitation** (§8) |
+| d2p crashes without sending `run_terminated` | `terminatedAt` stays NULL → endpoint never returns eof=true → tab polls forever. **Known limitation** (§8) |
 
 ## 7. Testing
 
@@ -225,10 +227,10 @@ All on the Hub side; d2p-side tests are the d2p session's responsibility.
 - Hub-spawned live run → uses `cur.stdoutPath`
 - External run with `runs.stdoutPath` set → uses that path
 - External run with NULL stdoutPath → falls back to runner-logs path
-- EOF logic: external run with `terminalState=null` returns `eof:false`
+- EOF logic: external run with `terminatedAt=null` returns `eof:false`
   even at end of file
-- EOF logic: external run with `terminalState='SUCCESS'` returns
-  `eof:true` at end of file
+- EOF logic: external run with `terminatedAt` set returns `eof:true` at
+  end of file
 - Missing file → 404 `log_not_found`
 
 **Integration** (`tests/hub/integration.test.ts`, new): write a
@@ -242,7 +244,7 @@ contract with the endpoint hasn't changed.
 ## 8. Known limitations
 
 - **Stale tail on d2p crash**: if d2p dies without sending
-  `run_terminated`, `terminalState` stays null and the tab polls forever.
+  `run_terminated`, `terminatedAt` stays NULL and the tab polls forever.
   A separate session-8-style crash-recovery sweep is the right fix
   (orphaned-run detection on Hub startup); deferring.
 - **Truncate-mid-run**: log file truncation is silently swallowed. d2p's
