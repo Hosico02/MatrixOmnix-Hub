@@ -131,9 +131,14 @@ export function runsRunnerRoute(
     const cur = supervisor.current();
     const { join: pJoin } = await import('node:path');
     const { dataDir } = (supervisor as unknown as { opts: { dataDir: string } }).opts;
+
+    // Single SELECT — used for both path resolution and EOF gate.
+    const runsRow = handle.db.select().from(runs).where(eq(runs.id, id)).get();
+
     const path = cur?.runId === id
       ? cur.stdoutPath
-      : pJoin(dataDir, 'runner-logs', `${id}.log`);
+      : (runsRow?.stdoutPath ?? pJoin(dataDir, 'runner-logs', `${id}.log`));
+
     const { open, stat: fstat } = await import('node:fs/promises');
     let size = 0;
     try {
@@ -141,9 +146,12 @@ export function runsRunnerRoute(
     } catch {
       return c.json({ error: 'log_not_found' }, 404);
     }
+
+    const isLive = cur?.runId === id
+                || (runsRow != null && runsRow.terminatedAt == null);
+
     if (from >= size) {
-      const eof = cur?.runId !== id;
-      return c.json({ content: '', next_offset: size, eof });
+      return c.json({ content: '', next_offset: size, eof: !isLive });
     }
     const fd = await open(path, 'r');
     try {
@@ -151,7 +159,7 @@ export function runsRunnerRoute(
       const buf = Buffer.alloc(chunkSize);
       await fd.read(buf, 0, chunkSize, from);
       const content = buf.toString('utf-8');
-      const eof = (from + chunkSize >= size) && cur?.runId !== id;
+      const eof = (from + chunkSize >= size) && !isLive;
       return c.json({ content, next_offset: from + chunkSize, eof });
     } finally {
       await fd.close();
