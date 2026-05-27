@@ -12,7 +12,7 @@ describe('POST /admin/learner/trigger', () => {
     const p = join(mkdtempSync(join(tmpdir(), 'ad-')), 'h.db');
     handle = openDb(p);
     migrate(handle.sqlite);
-    app = buildApp(handle, { adminToken: 'sec' });
+    app = buildApp(handle, { adminToken: 'sec', dataDir: '.' });
   });
 
   it('403 without admin token', async () => {

@@ -41,6 +41,7 @@ export function dispatchIngest(
         detectedArchetype: payload.detected_archetype ?? null,
         startedAt: payload.started_at ?? new Date().toISOString(),
         terminalState: 'RUNNING',
+        stdoutPath: payload.stdout_path ?? null,
       }).where(eq(runs.id, runId)).run();
       return;
     }

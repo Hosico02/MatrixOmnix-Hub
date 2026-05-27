@@ -77,4 +77,36 @@ describe('event handlers', () => {
     expect(r[0].terminalState).toBe('CLEAN');
     expect(r[0].totalIterations).toBe(6);
   });
+
+  it('run_started persists stdout_path when provided', () => {
+    dispatchIngest(handle, inst, 'run_started', 'run-sp1', {
+      project_path: '/p',
+      stdout_path: '/p/.d2p/run-sp1/d2p.log',
+      started_at: 't0',
+    });
+    const r = handle.db.select().from(runs).all();
+    expect(r).toHaveLength(1);
+    expect(r[0].stdoutPath).toBe('/p/.d2p/run-sp1/d2p.log');
+  });
+
+  it('run_started leaves stdout_path NULL when omitted', () => {
+    dispatchIngest(handle, inst, 'run_started', 'run-sp2', {
+      project_path: '/p',
+      started_at: 't0',
+    });
+    const r = handle.db.select().from(runs).all();
+    expect(r[0].stdoutPath).toBeNull();
+  });
+
+  it('run_started twice for same id — second stdout_path wins', () => {
+    dispatchIngest(handle, inst, 'run_started', 'run-dup', {
+      project_path: '/p', stdout_path: '/p/.d2p/run-dup/first.log', started_at: 't0',
+    });
+    dispatchIngest(handle, inst, 'run_started', 'run-dup', {
+      project_path: '/p', stdout_path: '/p/.d2p/run-dup/second.log', started_at: 't1',
+    });
+    const r = handle.db.select().from(runs).all();
+    expect(r).toHaveLength(1);
+    expect(r[0].stdoutPath).toBe('/p/.d2p/run-dup/second.log');
+  });
 });

@@ -21,7 +21,7 @@ describe('GET /standards/:archetype', () => {
       bodyMd: '# Initial fastapi-api standards\n- tests pass',
       isCurrent: true, source: 'manual',
     }).run();
-    app = buildApp(handle, { adminToken: 'a' });
+    app = buildApp(handle, { adminToken: 'a', dataDir: '.' });
   });
 
   it('200 returns current body + etag', async () => {

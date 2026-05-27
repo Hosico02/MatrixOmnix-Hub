@@ -20,7 +20,7 @@ describe('POST /events', () => {
     handle.db.insert(d2pInstances).values({
       id: randomUUID(), name: 'dev', tokenHash: bcrypt.hashSync(TOKEN, 4),
     }).run();
-    app = buildApp(handle, { adminToken: 'a' });
+    app = buildApp(handle, { adminToken: 'a', dataDir: '.' });
   });
 
   it('401 without bearer', async () => {

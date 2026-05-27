@@ -22,7 +22,7 @@ describe('POST /runs/:id/notes', () => {
       id: 'r1', instanceId: instId, projectPath: '/p',
       startedAt: new Date().toISOString(),
     }).run();
-    app = buildApp(handle, { adminToken: 'a' });
+    app = buildApp(handle, { adminToken: 'a', dataDir: '.' });
   });
 
   it('inserts a human note', async () => {

@@ -26,7 +26,7 @@ describe('proposals routes', () => {
       bodyMd: 'cors_policy_explicit', rationaleMd: 'seen 7/10 runs',
       source: 'rule', status: 'pending',
     }).run();
-    app = buildApp(handle, { adminToken: 'a' });
+    app = buildApp(handle, { adminToken: 'a', dataDir: '.' });
   });
 
   it('GET /proposals returns pending', async () => {

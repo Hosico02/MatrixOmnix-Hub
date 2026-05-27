@@ -15,14 +15,27 @@ function mkApp() {
     handle, dataDir: root, d2pPath: '/fake',
   });
   const app = buildApp(handle, {
-    adminToken: 'sec', runner: supervisor,
+    adminToken: 'sec', dataDir: root, runner: supervisor,
     runnerCfg: {
       enabled: true, d2pPath: '/fake', minimaxApiKey: 'k',
       instanceToken: 't', hubBaseUrl: 'http://127.0.0.1:3030',
       pathPrefixes: [homedir(), '/tmp'],
     },
   });
-  return { app, root };
+  return { app, root, handle };
+}
+
+function mkAppNoRunner() {
+  const root = mkdtempSync(join(tmpdir(), 'std-norunner-'));
+  const handle = openDb(join(root, 'h.db'));
+  migrate(handle.sqlite);
+  const app = buildApp(handle, {
+    adminToken: 'sec', dataDir: root,
+    // No `runner` opt — simulates a deployment where D2P_RUNNER_ENABLED=0
+    // (or its required env is missing). The stdout endpoint must still
+    // mount so external d2p runs are visible.
+  });
+  return { app, root, handle };
 }
 
 describe('GET /admin/runs/:id/stdout', () => {
@@ -65,5 +78,125 @@ describe('GET /admin/runs/:id/stdout', () => {
     const j = await r.json();
     expect(j.content).toBe('456789');
     expect(j.next_offset).toBe(10);
+  });
+
+  it('uses runs.stdout_path for external runs (no supervisor entry)', async () => {
+    const { runs, d2pInstances } = await import('../../src/hub/db/schema.js');
+    const inst = { id: randomUUID(), name: 'ext', tokenHash: 'x' };
+    const handle = env.handle;
+    handle.db.insert(d2pInstances).values(inst).run();
+    const extDir = join(env.root, 'ext');
+    mkdirSync(extDir, { recursive: true });
+    const extPath = join(extDir, 'd2p.log');
+    writeFileSync(extPath, 'external content\n');
+    handle.db.insert(runs).values({
+      id: 'run-ext-1',
+      instanceId: inst.id,
+      projectPath: '/p',
+      startedAt: 't0',
+      stdoutPath: extPath,
+    }).run();
+    const r = await env.app.request(
+      `/admin/runs/run-ext-1/stdout?from=0`,
+      { headers: { Authorization: 'Bearer sec' } },
+    );
+    expect(r.status).toBe(200);
+    const j = await r.json();
+    expect(j.content).toBe('external content\n');
+    expect(j.eof).toBe(false); // run has no terminatedAt → still live
+  });
+
+  it('external run with terminatedAt=null reports eof:false at end of file', async () => {
+    const { runs, d2pInstances } = await import('../../src/hub/db/schema.js');
+    const inst = { id: randomUUID(), name: 'ext', tokenHash: 'x' };
+    const handle = env.handle;
+    handle.db.insert(d2pInstances).values(inst).run();
+    const extPath = join(env.root, 'live.log');
+    writeFileSync(extPath, 'partial\n');
+    handle.db.insert(runs).values({
+      id: 'run-live', instanceId: inst.id, projectPath: '/p',
+      startedAt: 't0', stdoutPath: extPath, terminatedAt: null,
+    }).run();
+    const r = await env.app.request(
+      `/admin/runs/run-live/stdout?from=0`,
+      { headers: { Authorization: 'Bearer sec' } },
+    );
+    const j = await r.json();
+    expect(j.content).toBe('partial\n');
+    expect(j.eof).toBe(false);
+  });
+
+  it('external run with terminatedAt set reports eof:true at end of file', async () => {
+    const { runs, d2pInstances } = await import('../../src/hub/db/schema.js');
+    const inst = { id: randomUUID(), name: 'ext', tokenHash: 'x' };
+    const handle = env.handle;
+    handle.db.insert(d2pInstances).values(inst).run();
+    const extPath = join(env.root, 'done.log');
+    writeFileSync(extPath, 'finished\n');
+    handle.db.insert(runs).values({
+      id: 'run-done', instanceId: inst.id, projectPath: '/p',
+      startedAt: 't0', stdoutPath: extPath, terminatedAt: 't9',
+      terminalState: 'CLEAN',
+    }).run();
+    const r = await env.app.request(
+      `/admin/runs/run-done/stdout?from=0`,
+      { headers: { Authorization: 'Bearer sec' } },
+    );
+    const j = await r.json();
+    expect(j.content).toBe('finished\n');
+    expect(j.eof).toBe(true);
+  });
+
+  it('external run with NULL stdout_path falls back to runner-logs (404 if absent)', async () => {
+    const { runs, d2pInstances } = await import('../../src/hub/db/schema.js');
+    const inst = { id: randomUUID(), name: 'ext', tokenHash: 'x' };
+    const handle = env.handle;
+    handle.db.insert(d2pInstances).values(inst).run();
+    handle.db.insert(runs).values({
+      id: 'run-nopath', instanceId: inst.id, projectPath: '/p',
+      startedAt: 't0', stdoutPath: null,
+    }).run();
+    const r = await env.app.request(
+      `/admin/runs/run-nopath/stdout?from=0`,
+      { headers: { Authorization: 'Bearer sec' } },
+    );
+    expect(r.status).toBe(404);
+  });
+});
+
+describe('GET /admin/runs/:id/stdout — no runner configured', () => {
+  it('external run is still visible when runner is absent', async () => {
+    const env = mkAppNoRunner();
+    const { runs, d2pInstances } = await import('../../src/hub/db/schema.js');
+    const inst = { id: randomUUID(), name: 'ext', tokenHash: 'x' };
+    env.handle.db.insert(d2pInstances).values(inst).run();
+    const extDir = join(env.root, 'ext');
+    mkdirSync(extDir, { recursive: true });
+    const extPath = join(extDir, 'd2p.log');
+    writeFileSync(extPath, 'no-runner content\n');
+    env.handle.db.insert(runs).values({
+      id: 'run-norunner-ext',
+      instanceId: inst.id,
+      projectPath: '/p',
+      startedAt: 't0',
+      stdoutPath: extPath,
+    }).run();
+    const r = await env.app.request(
+      `/admin/runs/run-norunner-ext/stdout?from=0`,
+      { headers: { Authorization: 'Bearer sec' } },
+    );
+    expect(r.status).toBe(200);
+    const j = await r.json();
+    expect(j.content).toBe('no-runner content\n');
+    expect(j.eof).toBe(false); // terminatedAt is null
+  });
+
+  it('missing log returns 404 even without runner', async () => {
+    const env = mkAppNoRunner();
+    const r = await env.app.request(
+      `/admin/runs/${randomUUID()}/stdout?from=0`,
+      { headers: { Authorization: 'Bearer sec' } },
+    );
+    expect(r.status).toBe(404);
   });
 });

@@ -46,14 +46,14 @@ describe('POST /admin/learner/run-summariser', () => {
   });
 
   it('403 without admin token', async () => {
-    const app = buildApp(handle, { adminToken: 'sec', anthropic: null });
+    const app = buildApp(handle, { adminToken: 'sec', dataDir: '.', anthropic: null });
     const r = await app.request('/admin/learner/run-summariser',
       { method: 'POST' });
     expect(r.status).toBe(403);
   });
 
   it('503 when no Anthropic client is wired (LLM learner not configured)', async () => {
-    const app = buildApp(handle, { adminToken: 'sec', anthropic: null });
+    const app = buildApp(handle, { adminToken: 'sec', dataDir: '.', anthropic: null });
     const r = await app.request('/admin/learner/run-summariser', {
       method: 'POST',
       headers: { Authorization: 'Bearer sec' },
@@ -84,6 +84,7 @@ describe('POST /admin/learner/run-summariser', () => {
     };
     const app = buildApp(handle, {
       adminToken: 'sec',
+      dataDir: '.',
       anthropic: mockClient as any,
     });
     const r = await app.request('/admin/learner/run-summariser', {
@@ -105,7 +106,7 @@ describe('POST /admin/learner/run-summariser', () => {
       },
     };
     const app = buildApp(handle, {
-      adminToken: 'sec', anthropic: mockClient as any,
+      adminToken: 'sec', dataDir: '.', anthropic: mockClient as any,
     });
     // runLlmSummariser catches the LLM call error internally and returns 0
     // rather than propagating — verify that path completes cleanly (200, 0).

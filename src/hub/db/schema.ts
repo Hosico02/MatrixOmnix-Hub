@@ -17,6 +17,7 @@ export const runs = sqliteTable('runs', {
   startedAt: text('started_at').notNull(),
   terminatedAt: text('terminated_at'),
   terminalState: text('terminal_state'),
+  stdoutPath: text('stdout_path'),
   totalCostUsd: real('total_cost_usd').default(0),
   totalIterations: integer('total_iterations').default(0),
 }, (t) => ({

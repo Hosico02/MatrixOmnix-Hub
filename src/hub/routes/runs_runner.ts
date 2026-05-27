@@ -124,39 +124,9 @@ export function runsRunnerRoute(
     });
   });
 
-  // ---- GET /admin/runs/:id/stdout?from=N --------------------------------
-  r.get('/admin/runs/:id/stdout', gate, async (c) => {
-    const id = c.req.param('id');
-    const from = Number(c.req.query('from') ?? '0');
-    const cur = supervisor.current();
-    const { join: pJoin } = await import('node:path');
-    const { dataDir } = (supervisor as unknown as { opts: { dataDir: string } }).opts;
-    const path = cur?.runId === id
-      ? cur.stdoutPath
-      : pJoin(dataDir, 'runner-logs', `${id}.log`);
-    const { open, stat: fstat } = await import('node:fs/promises');
-    let size = 0;
-    try {
-      size = (await fstat(path)).size;
-    } catch {
-      return c.json({ error: 'log_not_found' }, 404);
-    }
-    if (from >= size) {
-      const eof = cur?.runId !== id;
-      return c.json({ content: '', next_offset: size, eof });
-    }
-    const fd = await open(path, 'r');
-    try {
-      const chunkSize = Math.min(size - from, 1_000_000);
-      const buf = Buffer.alloc(chunkSize);
-      await fd.read(buf, 0, chunkSize, from);
-      const content = buf.toString('utf-8');
-      const eof = (from + chunkSize >= size) && cur?.runId !== id;
-      return c.json({ content, next_offset: from + chunkSize, eof });
-    } finally {
-      await fd.close();
-    }
-  });
+  // The /admin/runs/:id/stdout endpoint used to live here. It moved to
+  // src/hub/routes/runs_logs.ts so external (non-Hub-spawned) runs are
+  // visible without requiring the runner subprocess env to be enabled.
 
   // ---- POST /admin/runs/:id/push-github ---------------------------------
   const PushBody = z.object({

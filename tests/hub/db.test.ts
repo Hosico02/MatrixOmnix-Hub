@@ -26,6 +26,19 @@ describe('db client', () => {
     expect(names).toContain('events');
   });
 
+  it('migrate is idempotent across multiple runs (incl. ALTER TABLE ADD COLUMN)', () => {
+    const { sqlite } = openDb(dbPath);
+    migrate(sqlite);
+    // Second run simulates a Hub restart against an existing DB. The framework
+    // re-applies every migration file on every boot; ALTER TABLE ADD COLUMN
+    // must not throw on the second pass.
+    expect(() => migrate(sqlite)).not.toThrow();
+    expect(() => migrate(sqlite)).not.toThrow();
+    // Sanity: the runs table still has stdout_path
+    const cols = sqlite.prepare("PRAGMA table_info(runs)").all() as { name: string }[];
+    expect(cols.map((c) => c.name)).toContain('stdout_path');
+  });
+
   it('insert and select round-trips', () => {
     const { db, sqlite } = openDb(dbPath);
     migrate(sqlite);

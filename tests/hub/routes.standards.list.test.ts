@@ -28,7 +28,7 @@ describe('standards list + history', () => {
       id: randomUUID(), standardsId: stdId, version: 2, bodyMd: '- v2 content',
       diffFromPrevMd: '+ new line',
     }).run();
-    app = buildApp(handle, { adminToken: 'a' });
+    app = buildApp(handle, { adminToken: 'a', dataDir: '.' });
   });
 
   it('GET /standards returns list of archetypes', async () => {
