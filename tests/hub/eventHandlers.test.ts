@@ -97,4 +97,16 @@ describe('event handlers', () => {
     const r = handle.db.select().from(runs).all();
     expect(r[0].stdoutPath).toBeNull();
   });
+
+  it('run_started twice for same id — second stdout_path wins', () => {
+    dispatchIngest(handle, inst, 'run_started', 'run-dup', {
+      project_path: '/p', stdout_path: '/p/.d2p/run-dup/first.log', started_at: 't0',
+    });
+    dispatchIngest(handle, inst, 'run_started', 'run-dup', {
+      project_path: '/p', stdout_path: '/p/.d2p/run-dup/second.log', started_at: 't1',
+    });
+    const r = handle.db.select().from(runs).all();
+    expect(r).toHaveLength(1);
+    expect(r[0].stdoutPath).toBe('/p/.d2p/run-dup/second.log');
+  });
 });
