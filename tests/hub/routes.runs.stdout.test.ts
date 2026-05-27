@@ -90,6 +90,7 @@ describe('GET /admin/runs/:id/stdout', () => {
     expect(r.status).toBe(200);
     const j = await r.json();
     expect(j.content).toBe('external content\n');
+    expect(j.eof).toBe(false); // run has no terminatedAt → still live
   });
 
   it('external run with terminatedAt=null reports eof:false at end of file', async () => {

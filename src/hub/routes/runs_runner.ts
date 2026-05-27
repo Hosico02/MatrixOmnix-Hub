@@ -147,6 +147,8 @@ export function runsRunnerRoute(
       return c.json({ error: 'log_not_found' }, 404);
     }
 
+    // runsRow==null (no DB record): isLive falls back to supervisor identity
+    // only. If also not the active run, treat as completed (eof=true).
     const isLive = cur?.runId === id
                 || (runsRow != null && runsRow.terminatedAt == null);
 
