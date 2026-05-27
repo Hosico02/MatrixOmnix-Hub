@@ -10,14 +10,21 @@ import { standardsRoute } from './routes/standards.js';
 import { runsRoute } from './routes/runs.js';
 import { proposalsRoute } from './routes/proposals.js';
 import { runsRunnerRoute, type RunnerConfig } from './routes/runs_runner.js';
+import { runsLogsRoute } from './routes/runs_logs.js';
 import { makeInstanceLookup } from './instanceLookup.js';
 import type { RunSupervisor } from './runner/supervisor.js';
 
 export interface AppOpts {
   adminToken: string | null;
   anthropic?: AnthropicLike | null;
+  // Where Hub-spawned run logs live (and the legacy stdout fallback
+  // directory). Required so the stdout endpoint can resolve paths even
+  // when no supervisor is configured.
+  dataDir: string;
   // Optional. When supplied AND runnerCfg.enabled is true, mount the
-  // /admin/runs/* routes. Otherwise those routes simply aren't registered.
+  // /admin/runs/{start,current,push-github} routes. The stdout endpoint
+  // mounts unconditionally so externally-started d2p runs are visible
+  // without the runner subprocess env being set.
   runner?: RunSupervisor | null;
   runnerCfg?: RunnerConfig | null;
 }
@@ -48,6 +55,13 @@ export function buildApp(handle: DbHandle, opts: AppOpts) {
   app.route('/api', standardsRoute(handle));
   app.route('/api', runsRoute(handle));
   app.route('/api', proposalsRoute(handle));
+
+  // Stdout endpoint mounts always — external runs need it.
+  app.route('/', runsLogsRoute(handle, {
+    adminToken: opts.adminToken,
+    dataDir: opts.dataDir,
+    supervisor: opts.runner ?? null,
+  }));
 
   if (opts.runner) {
     app.route('/', runsRunnerRoute(handle, opts.runner, {

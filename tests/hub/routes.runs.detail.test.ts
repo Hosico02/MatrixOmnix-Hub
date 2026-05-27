@@ -19,7 +19,7 @@ describe('GET /runs/:id', () => {
     migrate(handle.sqlite);
     inst = { id: randomUUID(), name: 'i', tokenHash: 'x' };
     handle.db.insert(d2pInstances).values(inst).run();
-    app = buildApp(handle, { adminToken: 'a' });
+    app = buildApp(handle, { adminToken: 'a', dataDir: '.' });
     dispatchIngest(handle, inst, 'run_started', 'r1', {
       project_path: '/p', detected_archetype: 'fastapi-api', started_at: 't0',
     });

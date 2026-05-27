@@ -17,7 +17,7 @@ function mkEnv() {
     handle, dataDir: root, d2pPath: '/fake',
   });
   const app = buildApp(handle, {
-    adminToken: 'sec', runner: supervisor,
+    adminToken: 'sec', dataDir: root, runner: supervisor,
     runnerCfg: {
       enabled: true, d2pPath: '/fake', minimaxApiKey: 'k',
       instanceToken: 't', hubBaseUrl: 'http://127.0.0.1:3030',

@@ -28,7 +28,7 @@ describe('GET /runs', () => {
         terminalState: i === 0 ? 'RUNNING' : 'CLEAN',
       }).run();
     }
-    app = buildApp(handle, { adminToken: 'a' });
+    app = buildApp(handle, { adminToken: 'a', dataDir: '.' });
   });
 
   it('returns all 5 by default, newest first', async () => {

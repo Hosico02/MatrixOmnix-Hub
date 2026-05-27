@@ -16,6 +16,7 @@ function mkApp(runnerEnabled = true) {
   });
   const app = buildApp(handle, {
     adminToken: 'sec',
+    dataDir: '.',
     runner: supervisor,
     runnerCfg: runnerEnabled ? {
       enabled: true,

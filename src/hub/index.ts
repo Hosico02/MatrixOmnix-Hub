@@ -38,6 +38,7 @@ async function main() {
   const app = buildApp(handle, {
     adminToken: cfg.adminToken,
     anthropic: anthropic as any,
+    dataDir: cfg.hubDataDir,
     runner: supervisor,
     runnerCfg: cfg.runnerEnabled ? {
       enabled: true,

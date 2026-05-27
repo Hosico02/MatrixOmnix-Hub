@@ -11,7 +11,7 @@ describe('server skeleton', () => {
     const dbPath = join(mkdtempSync(join(tmpdir(), 'srv-')), 'h.db');
     const handle = openDb(dbPath);
     migrate(handle.sqlite);
-    app = buildApp(handle, { adminToken: 'admin-secret' });
+    app = buildApp(handle, { adminToken: 'admin-secret', dataDir: '.' });
   });
 
   it('GET /admin/health returns 403 without token', async () => {
