@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import StatusBadge from '../../components/StatusBadge.vue';
 import HumanLabel from '../../components/HumanLabel.vue';
+import { hasTrouble } from '../../lib/trouble';
 
 const props = defineProps<{ data: any }>();
 
@@ -39,8 +40,13 @@ function verdictFindings(vId: string) {
         <div v-if="it.planner_summary" class="text-xs text-gray-600">
           计划: {{ it.planner_summary }}
         </div>
-        <div v-if="it.executor_summary" class="text-xs text-gray-600">
+        <div v-if="it.executor_summary" class="text-xs"
+             :class="hasTrouble(it.executor_summary) ? 'text-red-600' : 'text-gray-600'">
           执行: {{ it.executor_summary }}
+        </div>
+        <div v-if="it.qa_summary" class="text-xs"
+             :class="hasTrouble(it.qa_summary) ? 'text-red-600' : 'text-gray-600'">
+          QA: {{ it.qa_summary }}
         </div>
         <div v-for="v in iterVerdicts(it.id)" :key="v.id">
           <div class="text-sm mt-1">检查: {{ v.verdict }}<span v-if="v.confidence"> (置信度 {{ v.confidence.toFixed(2) }})</span></div>
