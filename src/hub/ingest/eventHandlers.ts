@@ -36,12 +36,19 @@ export function dispatchIngest(
   switch (type) {
     case 'run_started': {
       ensureRun(handle, inst, runId);
+      const vc = payload.verifier_confidence ?? null;
       handle.db.update(runs).set({
         projectPath: payload.project_path ?? '(unknown)',
         detectedArchetype: payload.detected_archetype ?? null,
         startedAt: payload.started_at ?? new Date().toISOString(),
         terminalState: 'RUNNING',
         stdoutPath: payload.stdout_path ?? null,
+        verifierCatchRate: vc?.catch_rate ?? null,
+        verifierFpRate: vc?.fp_rate ?? null,
+        verifierPassOnBroken: vc?.pass_on_broken ?? null,
+        verifierCriteriaMet: vc?.criteria_met ?? null,
+        verifierModel: vc?.model ?? null,
+        verifierCalibratedAt: vc?.calibrated_at ?? null,
       }).where(eq(runs.id, runId)).run();
       return;
     }

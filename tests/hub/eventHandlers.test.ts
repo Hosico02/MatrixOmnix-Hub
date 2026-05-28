@@ -98,6 +98,35 @@ describe('event handlers', () => {
     expect(r[0].stdoutPath).toBeNull();
   });
 
+  it('run_started persists verifier_confidence when provided', () => {
+    dispatchIngest(handle, inst, 'run_started', 'run-vc1', {
+      project_path: '/p', started_at: 't0',
+      verifier_confidence: {
+        catch_rate: 1.0, fp_rate: 0.1, pass_on_broken: 0,
+        criteria_met: true, model: 'minimax-m2.7-hs',
+        calibrated_at: '2026-05-26T12:06:08Z',
+      },
+    });
+    const r = handle.db.select().from(runs).all();
+    expect(r).toHaveLength(1);
+    expect(r[0].verifierCatchRate).toBe(1.0);
+    expect(r[0].verifierFpRate).toBe(0.1);
+    expect(r[0].verifierPassOnBroken).toBe(0);
+    expect(r[0].verifierCriteriaMet).toBe(true);
+    expect(r[0].verifierModel).toBe('minimax-m2.7-hs');
+    expect(r[0].verifierCalibratedAt).toBe('2026-05-26T12:06:08Z');
+  });
+
+  it('run_started leaves verifier_confidence columns NULL when omitted', () => {
+    dispatchIngest(handle, inst, 'run_started', 'run-vc2', {
+      project_path: '/p', started_at: 't0',
+    });
+    const r = handle.db.select().from(runs).all();
+    expect(r[0].verifierCatchRate).toBeNull();
+    expect(r[0].verifierCriteriaMet).toBeNull();
+    expect(r[0].verifierModel).toBeNull();
+  });
+
   it('run_started twice for same id — second stdout_path wins', () => {
     dispatchIngest(handle, inst, 'run_started', 'run-dup', {
       project_path: '/p', stdout_path: '/p/.d2p/run-dup/first.log', started_at: 't0',
