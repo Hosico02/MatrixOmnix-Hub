@@ -30,6 +30,25 @@ describe('event handlers', () => {
     expect(r[0].terminalState).toBe('RUNNING');
   });
 
+  it('iteration_complete persists narrative summaries', () => {
+    dispatchIngest(handle, inst, 'run_started', 'run-nar', {
+      project_path: '/p', started_at: 't0',
+    });
+    dispatchIngest(handle, inst, 'iteration_complete', 'run-nar', {
+      iter_n: 1, started_at: 't1', ended_at: 't2',
+      analyzer_summary: '理解为 multi-agent sim',
+      planner_summary: '排了 2 个任务：A、B',
+      executor_summary: '完成 1/2 个特性任务；失败：Login retry',
+      qa_summary: '新增 1 个 bug；仍有 1 个未解决',
+    });
+    const its = handle.db.select().from(iterations).all();
+    expect(its).toHaveLength(1);
+    expect(its[0].analyzerSummary).toBe('理解为 multi-agent sim');
+    expect(its[0].plannerSummary).toBe('排了 2 个任务：A、B');
+    expect(its[0].executorSummary).toContain('失败：Login retry');
+    expect(its[0].qaSummary).toContain('未解决');
+  });
+
   it('iteration_complete out-of-order creates placeholder then fills', () => {
     dispatchIngest(handle, inst, 'iteration_complete', 'run-2', {
       iter_n: 1, started_at: 't1', ended_at: 't2',
