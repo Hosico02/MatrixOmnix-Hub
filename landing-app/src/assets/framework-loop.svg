@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 540" role="img" aria-labelledby="title">
-  <title id="title">d2p and MatrixOmnix Hub loop</title>
+  <title id="title">MatrixOmnix Forge and Hub loop</title>
   <style>
     .bg { fill: transparent; }
     .box { fill: #1e293b; stroke: #475569; stroke-width: 1.5; rx: 12; }
@@ -45,7 +45,7 @@
   <!-- d2p box -->
   <rect class="box box-d2p" x="40" y="60" width="280" height="420"/>
   <text class="kicker" x="60" y="90">Do-layer</text>
-  <text class="title title-do" x="60" y="118">d2p</text>
+  <text class="title title-do" x="60" y="118">Forge</text>
   <text class="item" x="60" y="160">· Analyzer  · Planner</text>
   <text class="item" x="60" y="186">· Parallel Executors</text>
   <text class="item" x="60" y="212">· QA (regression corpus)</text>

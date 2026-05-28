@@ -35,7 +35,7 @@ onMounted(load);
     </div>
     <div v-if="loading" class="text-sm text-gray-500">加载中…</div>
     <div v-else-if="items.length === 0" class="text-sm text-gray-500">
-      {{ tab === 'pending' ? '当前没有待办,d2p 自己跑得不错。' : '没有已决定的项。' }}
+      {{ tab === 'pending' ? '当前没有待办,Forge 自己跑得不错。' : '没有已决定的项。' }}
     </div>
     <div v-else class="space-y-3">
       <div v-for="p in items" :key="p.id"

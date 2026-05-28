@@ -145,7 +145,7 @@ onMounted(async () => {
     <!-- Setup -->
     <section v-if="store.adminToken && runner.phase.value === 'idle'"
              class="bg-white border rounded-lg p-4">
-      <h2 class="text-base font-semibold mb-3">Run d2p on a folder</h2>
+      <h2 class="text-base font-semibold mb-3">Run MatrixOmnix Forge on a folder</h2>
       <div class="space-y-3">
         <div>
           <label class="block text-sm font-medium mb-1">Absolute project path</label>
@@ -160,7 +160,7 @@ onMounted(async () => {
         <button @click="onStart"
                 :disabled="!path || iter < 1 || iter > 10"
                 class="px-4 py-2 bg-emerald-600 text-white rounded text-sm disabled:opacity-50">
-          Run d2p
+          Run Forge
         </button>
       </div>
       <div class="mt-3 pt-3 border-t text-xs text-gray-500">
@@ -171,7 +171,7 @@ onMounted(async () => {
     <!-- Starting spinner -->
     <section v-else-if="runner.phase.value === 'starting'"
              class="bg-white border rounded-lg p-4 text-sm">
-      Starting d2p subprocess…
+      Starting Forge subprocess…
     </section>
 
     <!-- Progress -->

@@ -16,7 +16,7 @@ function fmtTime(s: string) {
 function oneLineOutcome(r: any) {
   if (r.terminal_state === 'CLEAN') return `完美交付,${r.total_iterations} 轮搞定`;
   if (r.terminal_state === 'WITH_RESIDUALS') return `基本可用,有问题没修完`;
-  if (r.terminal_state === 'ESCALATED') return `遇到 d2p 修不动的硬骨头,等你介入`;
+  if (r.terminal_state === 'ESCALATED') return `遇到 Forge 修不动的硬骨头,等你介入`;
   if (r.terminal_state === 'TIMEOUT') return `试到上限还没收敛`;
   return '';
 }

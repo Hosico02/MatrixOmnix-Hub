@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 540" role="img" aria-labelledby="deployment-title">
-  <title id="deployment-title">MatrixOmnix deployment topology: one Hub, many d2p instances</title>
+  <title id="deployment-title">MatrixOmnix deployment topology: one Hub, many MatrixOmnix Forge instances</title>
   <style>
     .bg { fill: transparent; }
     .machine { stroke-width: 1.5; rx: 12; }
@@ -39,20 +39,20 @@
   <rect class="bg" width="900" height="540"/>
 
   <!-- d2p instances on the left -->
-  <text class="kicker" x="40" y="50">d2p runs anywhere</text>
+  <text class="kicker" x="40" y="50">Forge runs anywhere</text>
 
   <rect class="machine machine-d2p" x="40" y="70" width="220" height="80"/>
-  <text class="label label-do" x="60" y="100">d2p · dev-laptop</text>
+  <text class="label label-do" x="60" y="100">Forge · dev-laptop</text>
   <text class="meta" x="60" y="125">HUB_URL=http://hub:3030</text>
   <text class="meta" x="60" y="142">python run.py demo/</text>
 
   <rect class="machine machine-d2p" x="40" y="170" width="220" height="80"/>
-  <text class="label label-do" x="60" y="200">d2p · ci-runner</text>
+  <text class="label label-do" x="60" y="200">Forge · ci-runner</text>
   <text class="meta" x="60" y="225">HUB_URL=http://hub:3030</text>
   <text class="meta" x="60" y="242">automated nightly</text>
 
   <rect class="machine machine-d2p" x="40" y="270" width="220" height="80"/>
-  <text class="label label-do" x="60" y="300">d2p · teammate</text>
+  <text class="label label-do" x="60" y="300">Forge · teammate</text>
   <text class="meta" x="60" y="325">HUB_URL=http://hub:3030</text>
   <text class="meta" x="60" y="342">python run.py other-demo/</text>
 
@@ -72,7 +72,7 @@
   <text class="meta" x="525" y="280">or 0.0.0.0 for LAN/VPS</text>
 
   <text class="meta" x="525" y="312">→ Vue dashboard at /</text>
-  <text class="meta" x="525" y="332">→ d2p clients hit /api/*</text>
+  <text class="meta" x="525" y="332">→ Forge clients hit /api/*</text>
 
   <!-- arrows from each d2p to Hub -->
   <path class="arrow" d="M 270 110 Q 380 90, 490 110"/>
@@ -82,7 +82,7 @@
   <!-- fail-safe notes at bottom -->
   <line class="divider" x1="40" y1="390" x2="860" y2="390"/>
   <text class="note-strong" x="40" y="425">fail-safe by design</text>
-  <text class="note" x="40" y="450">Hub down  →  d2p falls back to cached standards (then baked-in), keeps running, queues events locally</text>
-  <text class="note" x="40" y="472">d2p down  →  Hub is just an idle dashboard, no error state</text>
+  <text class="note" x="40" y="450">Hub down  →  Forge falls back to cached standards (then baked-in), keeps running, queues events locally</text>
+  <text class="note" x="40" y="472">Forge down  →  Hub is just an idle dashboard, no error state</text>
   <text class="note" x="40" y="494">no shared imports, no shared state — only HTTP + bearer token</text>
 </svg>

@@ -30,7 +30,7 @@ function verdictFindings(vId: string) {
     </header>
 
     <section class="bg-white border rounded-lg p-4">
-      <h3 class="font-semibold mb-2">d2p 这次都做了什么</h3>
+      <h3 class="font-semibold mb-2">Forge 这次都做了什么</h3>
       <div v-for="it in data.iterations" :key="it.id" class="border-l-2 border-gray-200 pl-3 mb-3">
         <div class="text-sm font-medium">第 {{ it.iter_n }} 轮</div>
         <div v-if="it.analyzer_summary" class="text-xs text-gray-600">

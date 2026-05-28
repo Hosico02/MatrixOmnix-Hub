@@ -12,7 +12,7 @@ onMounted(async () => { items.value = (await api.listStandards()).items; });
 <template>
   <div>
     <p class="text-sm text-gray-600 mb-3">
-      d2p 在判断"项目算不算 productize 完了"时,按这些规则来。
+      Forge 在判断"项目算不算 productize 完了"时,按这些规则来。
     </p>
     <div class="space-y-2">
       <div v-for="s in items" :key="s.archetype"

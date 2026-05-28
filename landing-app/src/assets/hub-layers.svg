@@ -59,7 +59,7 @@
   <text class="item-strong" x="105" y="463">待办 inbox:</text>
   <text class="item" x="200" y="463">human reviews each proposal, hits approve / reject / edit</text>
   <text class="item-strong" x="105" y="487">on approve:</text>
-  <text class="item" x="205" y="487">new row in standard_versions, standards.is_current flips, next d2p run uses it</text>
+  <text class="item" x="205" y="487">new row in standard_versions, standards.is_current flips, next Forge run uses it</text>
   <rect class="badge" x="660" y="418" width="140" height="26"/>
   <text class="badge-text" x="675" y="435">human gate</text>
 </svg>
