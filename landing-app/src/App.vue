@@ -121,6 +121,41 @@
           </figure>
         </div>
 
+        <section class="project-cards" aria-label="Explore the MatrixOmnix family">
+          <article class="project-card">
+            <div class="project-card__kicker">Live dashboard</div>
+            <h2 class="project-card__title">MatrixOmnix Hub</h2>
+            <p class="project-card__copy">
+              The observe-layer cockpit — a 中文 Vue dashboard over the Hono + SQLite backend. Browse runs, standards drift, and the human approval inbox in the browser. This live deployment is a seeded demo.
+            </p>
+            <div class="project-card__ctas">
+              <a class="project-card__cta" href="https://matrixomnix-hub.vercel.app" target="_blank" rel="noopener">Open the Hub →</a>
+              <a class="project-card__cta project-card__cta--ghost" href="https://github.com/anzy-renlab-ai/MatrixOmnix-Hub" target="_blank" rel="noopener">GitHub →</a>
+            </div>
+          </article>
+          <article class="project-card">
+            <div class="project-card__kicker">Live app</div>
+            <h2 class="project-card__title">MatrixOmnix Paper</h2>
+            <p class="project-card__copy">
+              Multi-agent acceptance predictor for academic papers. A jury of domain-expert critics (Novelty, Methodology, Clarity) debates and returns a calibrated per-venue acceptance probability — with their disagreements as the explanation.
+            </p>
+            <div class="project-card__ctas">
+              <a class="project-card__cta" href="https://matrixomnixpaper.vercel.app" target="_blank" rel="noopener">Open Paper →</a>
+              <a class="project-card__cta project-card__cta--ghost" href="https://github.com/Hosico02/MatrixOmnix-Paper" target="_blank" rel="noopener">GitHub →</a>
+            </div>
+          </article>
+          <article class="project-card">
+            <div class="project-card__kicker">CLI + API · Python</div>
+            <h2 class="project-card__title">MatrixOmnix Arena</h2>
+            <p class="project-card__copy">
+              Multi-competitor evaluation arena. Run multiple LLM/agent competitors against a shared task suite, score them, and get a leaderboard with surfaced judge disagreements. Every agent — sibling projects included — is evaluated as a black box.
+            </p>
+            <div class="project-card__ctas">
+              <a class="project-card__cta" href="https://github.com/Hosico02/MatrixOmnix-Arena" target="_blank" rel="noopener">GitHub →</a>
+            </div>
+          </article>
+        </section>
+
         <section class="about-narrative" aria-label="MatrixOmnix overview">
           <article>
             <h2>Why two subsystems</h2>
@@ -152,13 +187,19 @@
               Paper is the third project in the family, independent from the Forge ↔ Hub loop. It applies the same multi-agent design to academic paper review: a paper plus a target venue goes in, a jury of domain-expert critics (Novelty, Methodology, Clarity) deliberates, and a calibrated per-venue acceptance probability comes out. Explainability-first: the critics' disagreements ARE the explanation, not a derived summary. It covers every domain (CS, Physics, Bio, Med, Econ, SocSci), not just CS like existing predictors. Tech stack: FastAPI + Anthropic + MiniMax on the backend, Vue 3 + Vite + Pinia + Tailwind on the frontend, SQLite for stored predictions, deployed at <a href="https://matrixomnixpaper.vercel.app" target="_blank" rel="noopener">matrixomnixpaper.vercel.app</a>. No shared imports with Forge or Hub — just shared philosophy and brand.
             </p>
           </article>
+          <article>
+            <h2>What MatrixOmnix Arena does</h2>
+            <p>
+              Arena is the fourth project in the family — a multi-competitor evaluation harness, also outside the Forge ↔ Hub loop. You define a shared task suite, register competitors (LLMs or whole agents), and Arena runs them all, scores the outputs, and produces a leaderboard with judge disagreements surfaced rather than averaged away. It treats every competitor — including the other MatrixOmnix projects — as a black box reached through CLI/HTTP adapters, so nothing leaks across boundaries. Python stack: a <code>matrixomnix-arena</code> CLI plus a FastAPI service (<code>POST /run</code>, <code>GET /leaderboard</code>); a <code>mock</code> backend runs fully offline, or point it at MiniMax / Anthropic. No shared code, DB, or config with Forge, Hub, or Paper.
+            </p>
+          </article>
         </section>
 
         <section class="text-grid" aria-label="Current shape and roadmap">
           <article>
             <h2>Current shape</h2>
             <p>
-              Three repos under the MatrixOmnix umbrella: <code>Hosico02/d2p</code> (MatrixOmnix Forge, the do-layer, ~14k LOC Python), <code>anzy-renlab-ai/MatrixOmnix-Hub</code> (the observe-layer, ~13k LOC TypeScript + Vue), and <code>Hosico02/MatrixOmnix-Paper</code> (the sibling, ~2k LOC across FastAPI backend + Vue SPA, hosted at matrixomnixpaper.vercel.app). All open source; all test suites currently green.
+              Four repos under the MatrixOmnix umbrella: <code>Hosico02/d2p</code> (MatrixOmnix Forge, the do-layer, ~14k LOC Python), <code>anzy-renlab-ai/MatrixOmnix-Hub</code> (the observe-layer, ~13k LOC TypeScript + Vue), <code>Hosico02/MatrixOmnix-Paper</code> (the acceptance predictor, FastAPI backend + Vue SPA, hosted at matrixomnixpaper.vercel.app), and <code>Hosico02/MatrixOmnix-Arena</code> (the evaluation harness, a Python CLI + FastAPI service). All open source; all test suites currently green.
             </p>
           </article>
           <article>
@@ -178,6 +219,9 @@
           </a>
           <a class="repo-link" href="https://github.com/Hosico02/MatrixOmnix-Paper" target="_blank" rel="noreferrer">
             Paper repository: github.com/Hosico02/MatrixOmnix-Paper
+          </a>
+          <a class="repo-link" href="https://github.com/Hosico02/MatrixOmnix-Arena" target="_blank" rel="noreferrer">
+            Arena repository: github.com/Hosico02/MatrixOmnix-Arena
           </a>
         </div>
 

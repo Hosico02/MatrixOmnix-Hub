@@ -20,6 +20,15 @@ export const runs = sqliteTable('runs', {
   stdoutPath: text('stdout_path'),
   totalCostUsd: real('total_cost_usd').default(0),
   totalIterations: integer('total_iterations').default(0),
+  // Calibration snapshot of the Forge build that produced this run, pushed in
+  // the run_started payload. Lets orchestration weight how far to trust the
+  // run's verdicts. Null when the Forge build has never been calibrated.
+  verifierCatchRate: real('verifier_catch_rate'),
+  verifierFpRate: real('verifier_fp_rate'),
+  verifierPassOnBroken: integer('verifier_pass_on_broken'),
+  verifierCriteriaMet: integer('verifier_criteria_met', { mode: 'boolean' }),
+  verifierModel: text('verifier_model'),
+  verifierCalibratedAt: text('verifier_calibrated_at'),
 }, (t) => ({
   byInstanceTime: index('runs_instance_time').on(t.instanceId, t.startedAt),
   byArchetypeState: index('runs_archetype_state').on(t.detectedArchetype, t.terminalState),

@@ -30,6 +30,25 @@ describe('event handlers', () => {
     expect(r[0].terminalState).toBe('RUNNING');
   });
 
+  it('iteration_complete persists narrative summaries', () => {
+    dispatchIngest(handle, inst, 'run_started', 'run-nar', {
+      project_path: '/p', started_at: 't0',
+    });
+    dispatchIngest(handle, inst, 'iteration_complete', 'run-nar', {
+      iter_n: 1, started_at: 't1', ended_at: 't2',
+      analyzer_summary: '理解为 multi-agent sim',
+      planner_summary: '排了 2 个任务：A、B',
+      executor_summary: '完成 1/2 个特性任务；失败：Login retry',
+      qa_summary: '新增 1 个 bug；仍有 1 个未解决',
+    });
+    const its = handle.db.select().from(iterations).all();
+    expect(its).toHaveLength(1);
+    expect(its[0].analyzerSummary).toBe('理解为 multi-agent sim');
+    expect(its[0].plannerSummary).toBe('排了 2 个任务：A、B');
+    expect(its[0].executorSummary).toContain('失败：Login retry');
+    expect(its[0].qaSummary).toContain('未解决');
+  });
+
   it('iteration_complete out-of-order creates placeholder then fills', () => {
     dispatchIngest(handle, inst, 'iteration_complete', 'run-2', {
       iter_n: 1, started_at: 't1', ended_at: 't2',
@@ -96,6 +115,35 @@ describe('event handlers', () => {
     });
     const r = handle.db.select().from(runs).all();
     expect(r[0].stdoutPath).toBeNull();
+  });
+
+  it('run_started persists verifier_confidence when provided', () => {
+    dispatchIngest(handle, inst, 'run_started', 'run-vc1', {
+      project_path: '/p', started_at: 't0',
+      verifier_confidence: {
+        catch_rate: 1.0, fp_rate: 0.1, pass_on_broken: 0,
+        criteria_met: true, model: 'minimax-m2.7-hs',
+        calibrated_at: '2026-05-26T12:06:08Z',
+      },
+    });
+    const r = handle.db.select().from(runs).all();
+    expect(r).toHaveLength(1);
+    expect(r[0].verifierCatchRate).toBe(1.0);
+    expect(r[0].verifierFpRate).toBe(0.1);
+    expect(r[0].verifierPassOnBroken).toBe(0);
+    expect(r[0].verifierCriteriaMet).toBe(true);
+    expect(r[0].verifierModel).toBe('minimax-m2.7-hs');
+    expect(r[0].verifierCalibratedAt).toBe('2026-05-26T12:06:08Z');
+  });
+
+  it('run_started leaves verifier_confidence columns NULL when omitted', () => {
+    dispatchIngest(handle, inst, 'run_started', 'run-vc2', {
+      project_path: '/p', started_at: 't0',
+    });
+    const r = handle.db.select().from(runs).all();
+    expect(r[0].verifierCatchRate).toBeNull();
+    expect(r[0].verifierCriteriaMet).toBeNull();
+    expect(r[0].verifierModel).toBeNull();
   });
 
   it('run_started twice for same id — second stdout_path wins', () => {

@@ -471,6 +471,81 @@ input:focus-visible,
   text-underline-offset: 4px;
 }
 
+.project-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 22px;
+  margin-top: 48px;
+}
+
+.project-card {
+  border: 1px solid #111;
+  background: #fff;
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.project-card__kicker {
+  font-size: 0.78rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.project-card__title {
+  font-size: 1.35rem;
+  font-weight: 600;
+  margin: 0;
+  color: #111;
+}
+
+.project-card__copy {
+  margin: 0;
+  flex: 1;
+  color: var(--muted);
+  line-height: 1.7;
+  font-size: 0.96rem;
+}
+
+.project-card__copy code {
+  padding: 2px 5px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.project-card__ctas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.project-card__cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border: 1px solid #111;
+  color: #111;
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 0.9rem;
+  background: #fff;
+  transition: transform 120ms ease, background 120ms ease, color 120ms ease;
+}
+
+.project-card__cta:hover {
+  transform: translateY(-1px);
+  background: #111;
+  color: #fff;
+}
+
+.project-card__cta--ghost {
+  background: transparent;
+}
+
 .usage-card {
   display: grid;
   gap: 14px;
@@ -537,6 +612,15 @@ input:focus-visible,
   .text-grid,
   .service-layout,
   .contact-grid {
+    grid-template-columns: 1fr;
+  }
+  .project-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .project-cards {
     grid-template-columns: 1fr;
   }
 }
