@@ -815,3 +815,92 @@ input:focus-visible,
     width: min(100% - 32px, 980px);
   }
 }
+
+/* Produce page — live-preview cards (Hub, Paper) above source-only cards. */
+.produce-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 22px;
+  margin-top: 48px;
+}
+
+.produce-card {
+  border: 1px solid #111;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+}
+
+/* The frame clips a full site rendered at 1280px logical width, scaled down to
+   fill the card via --frame-scale (set in JS, with a sane CSS fallback). */
+.produce-card__frame {
+  position: relative;
+  display: block;
+  height: 300px;
+  overflow: hidden;
+  border-bottom: 1px solid #111;
+  background: var(--panel);
+  text-decoration: none;
+}
+
+.produce-card__iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1280px;
+  height: 1600px;
+  border: 0;
+  transform: scale(var(--frame-scale, 0.45));
+  transform-origin: 0 0;
+  pointer-events: none;
+}
+
+.produce-card__placeholder {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+
+.produce-card__placeholder img {
+  width: 64px;
+  height: 64px;
+  opacity: 0.35;
+}
+
+.produce-card__overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(17, 17, 17, 0.72);
+  color: #fff;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+
+.produce-card__frame:hover .produce-card__overlay,
+.produce-card__frame:focus-visible .produce-card__overlay {
+  opacity: 1;
+}
+
+.produce-card__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 28px;
+  flex: 1;
+}
+
+.produce-source-cards {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (max-width: 900px) {
+  .produce-grid,
+  .produce-source-cards {
+    grid-template-columns: 1fr;
+  }
+}

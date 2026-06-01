@@ -230,6 +230,60 @@
         </p>
       </section>
 
+      <section v-else-if="page === 'produce'" class="content-page produce-page" id="produce">
+        <PageHeading kicker="Produce" title="The MatrixOmnix family, as live cards.">
+          Every product with a hosted deployment is embedded as a live preview — the card is its real homepage, scaled to fit. Click any preview to open the full site in a new tab. Products that ship as a CLI or library link straight to source.
+        </PageHeading>
+
+        <section class="produce-grid" aria-label="Live product previews">
+          <article v-for="p in liveProducts" :key="p.id" class="produce-card">
+            <a
+              class="produce-card__frame"
+              :href="p.url"
+              target="_blank"
+              rel="noopener"
+              :data-frame-id="p.id"
+              :aria-label="`Open ${p.title} live in a new tab`"
+            >
+              <iframe
+                v-if="visibleFrames.has(p.id)"
+                class="produce-card__iframe"
+                :src="p.url"
+                :title="`${p.title} live preview`"
+                loading="lazy"
+                tabindex="-1"
+                aria-hidden="true"
+                scrolling="no"
+              ></iframe>
+              <span v-else class="produce-card__placeholder" aria-hidden="true">
+                <img src="./assets/matrixomnix_icon.svg" alt="" />
+              </span>
+              <span class="produce-card__overlay">Open live →</span>
+            </a>
+            <div class="produce-card__meta">
+              <div class="project-card__kicker">{{ p.kicker }}</div>
+              <h2 class="project-card__title">{{ p.title }}</h2>
+              <p class="project-card__copy">{{ p.copy }}</p>
+              <div class="project-card__ctas">
+                <a class="project-card__cta" :href="p.url" target="_blank" rel="noopener">Open live →</a>
+                <a class="project-card__cta project-card__cta--ghost" :href="p.github" target="_blank" rel="noopener">GitHub →</a>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="project-cards produce-source-cards" aria-label="Source-only products">
+          <article v-for="p in sourceProducts" :key="p.id" class="project-card">
+            <div class="project-card__kicker">{{ p.kicker }}</div>
+            <h2 class="project-card__title">{{ p.title }}</h2>
+            <p class="project-card__copy">{{ p.copy }}</p>
+            <div class="project-card__ctas">
+              <a class="project-card__cta" :href="p.github" target="_blank" rel="noopener">GitHub →</a>
+            </div>
+          </article>
+        </section>
+      </section>
+
       <section v-else-if="page === 'service'" class="content-page service-page" id="service">
         <PageHeading kicker="Service" title="How to run MatrixOmnix today.">
           MatrixOmnix is self-host first. The Forge ↔ Hub loop is two open-source repos: run the Hub on one machine (self-host or localhost), run Forge anywhere it has network to the Hub. Forge auto-reports run events; the Hub aggregates, learns, and gates standards changes through a 中文 approval inbox. The sibling, <strong>MatrixOmnix Paper</strong>, ships with a hosted UI at <a href="https://matrixomnixpaper.vercel.app" target="_blank" rel="noopener">matrixomnixpaper.vercel.app</a> — open it in a browser and submit a paper, no install needed.
@@ -300,13 +354,53 @@
 </template>
 
 <script setup>
-import { computed, defineComponent, h, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, defineComponent, h, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 const navItems = [
   { id: 'home', label: 'Home' },
   { id: 'about', label: 'About' },
+  { id: 'produce', label: 'Produce' },
   { id: 'service', label: 'Service' },
   { id: 'contact', label: 'Contact' },
+]
+
+// Products with a hosted homepage get a live iframe preview card; the rest get
+// a source-only card. Frame previews load the real site at a large logical
+// width and scale it down (see style.css + the frame observers below).
+const liveProducts = [
+  {
+    id: 'hub',
+    kicker: 'Live dashboard',
+    title: 'MatrixOmnix Hub',
+    url: 'https://matrixomnix-hub.vercel.app',
+    github: 'https://github.com/anzy-renlab-ai/MatrixOmnix-Hub',
+    copy: 'The observe-layer cockpit — a 中文 Vue dashboard over the Hono + SQLite backend. Browse runs, standards drift, and the human approval inbox. This live deployment is a seeded demo.',
+  },
+  {
+    id: 'paper',
+    kicker: 'Live app',
+    title: 'MatrixOmnix Paper',
+    url: 'https://matrixomnixpaper.vercel.app',
+    github: 'https://github.com/Hosico02/MatrixOmnix-Paper',
+    copy: 'Multi-agent acceptance predictor for academic papers. A jury of domain-expert critics debates and returns a calibrated per-venue acceptance probability — with their disagreements as the explanation.',
+  },
+]
+
+const sourceProducts = [
+  {
+    id: 'forge',
+    kicker: 'CLI · 仅源码',
+    title: 'MatrixOmnix Forge',
+    github: 'https://github.com/Hosico02/d2p',
+    copy: 'The do-layer — an LLM-driven Python orchestrator. Analyzer / Planner / parallel Executors / QA turn a rough demo into a verified product. Self-host first, no hosted UI to embed.',
+  },
+  {
+    id: 'arena',
+    kicker: 'CLI + API · 仅源码',
+    title: 'MatrixOmnix Arena',
+    github: 'https://github.com/Hosico02/MatrixOmnix-Arena',
+    copy: 'Multi-competitor evaluation harness. Register competitors against a shared task suite, score them, and get a leaderboard with judge disagreements surfaced. Python CLI + FastAPI service.',
+  },
 ]
 
 const routeFromPath = () => {
@@ -321,6 +415,78 @@ const maskX = ref(window.innerWidth / 2)
 const maskY = ref(window.innerHeight / 2)
 const titleStackRef = ref(null)
 const flippedPanels = ref(new Set())
+
+// Produce page: which live-preview iframes have been given a src yet. Frames
+// load lazily when scrolled into view and unload when leaving the page, so we
+// never keep two full apps running in the background.
+const visibleFrames = ref(new Set())
+const FRAME_LOGICAL_WIDTH = 1280
+let frameIntersectionObserver = null
+let frameResizeObserver = null
+
+// Scale each frame's iframe so the site (rendered at FRAME_LOGICAL_WIDTH) fills
+// the card width. CSS reads --frame-scale; this keeps it correct on resize.
+const applyFrameScale = (el) => {
+  const width = el.clientWidth
+  if (width > 0) el.style.setProperty('--frame-scale', String(width / FRAME_LOGICAL_WIDTH))
+}
+
+const observeFrames = () => {
+  const frames = Array.from(document.querySelectorAll('[data-frame-id]'))
+  if (!frames.length) return
+
+  if (typeof ResizeObserver !== 'undefined') {
+    frameResizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) applyFrameScale(entry.target)
+    })
+    frames.forEach((el) => {
+      applyFrameScale(el)
+      frameResizeObserver.observe(el)
+    })
+  } else {
+    frames.forEach(applyFrameScale)
+  }
+
+  if (typeof IntersectionObserver === 'undefined') {
+    visibleFrames.value = new Set(liveProducts.map((p) => p.id))
+    return
+  }
+  frameIntersectionObserver = new IntersectionObserver(
+    (entries, observer) => {
+      let changed = false
+      const next = new Set(visibleFrames.value)
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue
+        const id = entry.target.dataset.frameId
+        if (id && !next.has(id)) {
+          next.add(id)
+          changed = true
+        }
+        observer.unobserve(entry.target)
+      }
+      if (changed) visibleFrames.value = next
+    },
+    { rootMargin: '200px' },
+  )
+  frames.forEach((el) => frameIntersectionObserver.observe(el))
+}
+
+const teardownFrames = () => {
+  frameIntersectionObserver?.disconnect()
+  frameResizeObserver?.disconnect()
+  frameIntersectionObserver = null
+  frameResizeObserver = null
+  visibleFrames.value = new Set()
+}
+
+watch(page, async (value) => {
+  if (value === 'produce') {
+    await nextTick()
+    observeFrames()
+  } else {
+    teardownFrames()
+  }
+})
 
 const cursorStyle = computed(() => ({
   '--cursor-x': `${cursorX.value}px`,
@@ -385,6 +551,12 @@ onMounted(() => {
   document.addEventListener('pointermove', onPointerMove, { passive: true })
   window.addEventListener('popstate', onPopState)
 
+  // Direct load on /produce: the page watcher won't fire (no change), so wire
+  // up the frame observers here.
+  if (page.value === 'produce') {
+    nextTick().then(observeFrames)
+  }
+
   cleanup = () => {
     if (frame) window.cancelAnimationFrame(frame)
     document.removeEventListener('pointermove', onPointerMove)
@@ -392,7 +564,10 @@ onMounted(() => {
   }
 })
 
-onBeforeUnmount(() => cleanup())
+onBeforeUnmount(() => {
+  cleanup()
+  teardownFrames()
+})
 
 const PageHeading = defineComponent({
   props: {
