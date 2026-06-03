@@ -369,6 +369,22 @@ const navItems = [
 // width and scale it down (see style.css + the frame observers below).
 const liveProducts = [
   {
+    id: 'envoy',
+    kicker: 'Live demo',
+    title: 'MatrixOmnix Envoy',
+    url: 'https://matrixomnix-envoy.vercel.app',
+    github: 'https://github.com/Hosico02/MatrixOmnix-Envoy',
+    copy: 'A decentralized task-claim hub — 去中心化任务认领中心. Bosses post tasks, workers\' agents sense load and claim first-come-first-served with an atomic lock, then report back — proxying away the human-to-human coordination while people still do the real work. This card embeds the static demo as a live preview.',
+  },
+  {
+    id: 'elysium',
+    kicker: 'Live app',
+    title: 'MatrixOmnix Elysium',
+    url: 'https://matrixomnix-elysium.vercel.app',
+    github: 'https://github.com/Hosico02/MatrixOmnix-Elysium',
+    copy: 'The newest sibling in the MatrixOmnix family, shipping with a hosted UI — no install needed. This card embeds the real deployment as a live preview; click through to open the full site.',
+  },
+  {
     id: 'hub',
     kicker: 'Live dashboard',
     title: 'MatrixOmnix Hub',
